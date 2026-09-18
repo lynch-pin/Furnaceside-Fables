@@ -4,11 +4,36 @@
  */
 import Layout from '../layouts/Layout.astro';
 import { loadTimeline, loadMeta, loadStories, loadOperators, KIND_LABEL } from '../lib/data.mjs';
+import { pickDaily, todayKst } from '../lib/daily.mjs';
 
 const timeline = loadTimeline();
 const meta = loadMeta();
 const { stories } = loadStories();
 const operators = loadOperators();
+const summaryOf = new Map(stories.map((s) => [s.id, s.summary]));
+
+// 오늘의 추천: 읽을 수 있는 스토리가 있는 이벤트 중 날짜 시드로 4개.
+// 정적 사이트이므로 빌드 시점 날짜로 미리 렌더하고, 브라우저에서 오늘(KST) 날짜로 다시 고른다.
+const RECOMMEND_COUNT = 4;
+const pool = timeline
+  .filter((t) => t.stories.some((s: any) => s.available))
+  .map((t) => {
+    const first = t.stories.find((s: any) => s.available)!;
+    const summary = t.stories.map((s: any) => summaryOf.get(s.id)).find(Boolean) ?? null;
+    return {
+      id: t.id,
+      name: t.name,
+      kindLabel: t.chapter?.label ?? KIND_LABEL[t.kind],
+      period: t.loreLabel ?? '연대 미상',
+      image: t.image ?? null,
+      count: t.stories.filter((s: any) => s.available).length,
+      firstStoryId: first.id,
+      cn: t.sourceLocale === 'zh_CN',
+      summary: summary ? summary.replace(/\s+/g, ' ').slice(0, 140) : null,
+    };
+  });
+const buildDate = todayKst();
+const picked = pickDaily(pool, RECOMMEND_COUNT, buildDate);
 
 // 연표 미리보기: 세계관 연도별 이벤트 수 (연대 미상은 제외)
 const yearCounts = new Map<number, number>();
@@ -41,6 +66,33 @@ const recent = [...timeline].sort((a, b) => b.releaseTimestamp - a.releaseTimest
       </a>
     </section>
 
+    <section class="recommend">
+      <h2>오늘의 스토리 추천 <span class="muted small" id="rec-date">{buildDate}</span></h2>
+      <ul class="list-plain rec-list" id="rec-list">
+        {picked.map((r) => (
+          <li>
+            <a class="card rec" href={`/timeline#${r.id}`}>
+              {r.image ? (
+                <img class="rec__thumb" src={r.image} alt="" loading="lazy" decoding="async" />
+              ) : (
+                <span class="rec__thumb thumb--placeholder" />
+              )}
+              <span class="rec__body">
+                <span class="rec__title">
+                  <span class="badge">{r.kindLabel}</span>
+                  <strong>{r.name}</strong>
+                  {r.cn && <span class="badge badge--fallback">CN server</span>}
+                </span>
+                <span class="muted small rec__meta">{r.period} · {r.count}편</span>
+                {r.summary && <span class="muted small rec__summary">{r.summary}</span>}
+              </span>
+            </a>
+          </li>
+        ))}
+      </ul>
+      <p class="small muted">매일 바뀝니다. 항목을 누르면 연표에서 스토리 목록이 펼쳐집니다.</p>
+    </section>
+
     <section>
       <h2>연표 미리보기</h2>
       <p class="muted small">테라 력 기준. 연도를 누르면 해당 구간으로 이동합니다.</p>
@@ -66,7 +118,7 @@ const recent = [...timeline].sort((a, b) => b.releaseTimestamp - a.releaseTimest
     </section>
 
     <section>
-      <h2>최근 출시 <span class="muted small">(참고)</span></h2>
+      <h2>최근 출시</h2>
       <ol class="list-plain preview">
         {recent.map((g) => (
           <li class="preview__item">
@@ -80,11 +132,44 @@ const recent = [...timeline].sort((a, b) => b.releaseTimestamp - a.releaseTimest
       </ol>
     </section>
 
+    <script type="application/json" id="rec-pool" set:html={JSON.stringify(pool)} is:inline />
+
     <p class="small muted">
       데이터 버전: ko_KR {meta.versions.ko_KR ?? '-'} · zh_CN {meta.versions.zh_CN ?? '-'} · 생성 {meta.generatedAt.slice(0, 10)}
     </p>
   </div>
 </Layout>
+
+<script>
+  // 빌드 시점 날짜로 렌더된 추천을 오늘(KST) 날짜 기준으로 다시 고른다.
+  import { pickDaily, todayKst } from '../lib/daily.mjs';
+
+  const list = document.getElementById('rec-list');
+  const poolEl = document.getElementById('rec-pool');
+  const dateEl = document.getElementById('rec-date');
+  if (list && poolEl && dateEl) {
+    const today = todayKst();
+    if (today !== dateEl.textContent?.trim()) {
+      const pool = JSON.parse(poolEl.textContent || '[]');
+      const picked = pickDaily(pool, 4, today);
+      const esc = (v: string) =>
+        v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      list.innerHTML = picked
+        .map(
+          (r: any) => `<li><a class="card rec" href="/timeline#${esc(r.id)}">
+            ${r.image ? `<img class="rec__thumb" src="${esc(r.image)}" alt="" loading="lazy" decoding="async">` : '<span class="rec__thumb thumb--placeholder"></span>'}
+            <span class="rec__body">
+              <span class="rec__title"><span class="badge">${esc(r.kindLabel)}</span><strong>${esc(r.name)}</strong>${r.cn ? '<span class="badge badge--fallback">CN server</span>' : ''}</span>
+              <span class="muted small rec__meta">${esc(r.period)} · ${r.count}편</span>
+              ${r.summary ? `<span class="muted small rec__summary">${esc(r.summary)}</span>` : ''}
+            </span>
+          </a></li>`,
+        )
+        .join('');
+      dateEl.textContent = today;
+    }
+  }
+</script>
 
 <style>
   .hero {
@@ -108,6 +193,54 @@ const recent = [...timeline].sort((a, b) => b.releaseTimestamp - a.releaseTimest
     display: flex;
     flex-direction: column;
     color: inherit;
+  }
+  .recommend {
+    margin-bottom: 2rem;
+  }
+  .rec-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+    gap: 0.6rem;
+  }
+  .rec {
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.6rem;
+    color: inherit;
+    height: 100%;
+  }
+  .rec:hover {
+    border-color: var(--color-accent);
+    text-decoration: none;
+  }
+  .rec__thumb {
+    width: 6rem;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    border-radius: 4px;
+    background: var(--color-line);
+    flex-shrink: 0;
+  }
+  .rec__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+  }
+  .rec__title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem 0.5rem;
+  }
+  .rec__meta {
+    font-family: var(--font-sans);
+  }
+  .rec__summary {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
   .years {
     display: grid;
