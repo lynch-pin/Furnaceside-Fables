@@ -403,6 +403,8 @@ for (const groupId of unionKeys(storyReview)) {
       infoPath: d.storyInfo ?? null,
       summary: info?.locale === PRIMARY ? info.text : (trStory.summary ?? info?.text ?? null),
       summaryLocale: info?.locale ?? null,
+      // 메타(이름/줄거리) 번역 상태 — translate.mjs --export-meta 가 번역 필요 항목을 고를 때 사용
+      metaNeedsTranslation: Boolean((sname.needsTranslation && !sname.translated) || (info && info.locale !== PRIMARY && !trStory.summary)),
       image,
       // locale: 스크립트 원문 서버. translated: 본문 번역 캐시 존재. needsTranslation: CN 원문인데 본문 번역 없음
       locale: script?.locale ?? null,

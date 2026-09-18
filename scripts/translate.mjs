@@ -78,8 +78,7 @@ if (flag('--export-meta')) {
   const meta = { groups: {}, stories: {} };
   for (const g of DATA.groups) if (g.needsTranslation) meta.groups[g.id] = { name: g.name };
   for (const s of DATA.stories) {
-    if (s.needsTranslation && !s.translated && (s.name || s.summary)) {
-      // 이름이 이미 번역된 경우(meta.json 에 있음)는 process-data 가 translated 로 표시하므로 여기서 제외됨
+    if (s.metaNeedsTranslation) {
       meta.stories[s.id] = { name: s.name, avgTag: s.avgTag ?? undefined, summary: s.summaryLocale === 'zh_CN' ? s.summary : undefined };
     }
   }
