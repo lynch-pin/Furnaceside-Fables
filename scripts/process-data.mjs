@@ -80,6 +80,7 @@ const charword = loadExcelAll('charword_table', { required: false });
 const handbook = loadExcelAll('handbook_info_table', { required: false });
 const handbookTeam = loadExcelAll('handbook_team_table', { required: false });
 const zone = loadExcelAll('zone_table', { required: false });
+const storyReviewMeta = loadExcelAll('story_review_meta_table', { required: false });
 
 /** 모든 로케일에 걸친 키 합집합 (ko 순서 우선) */
 const unionKeys = (tables) => {
@@ -167,6 +168,65 @@ const zoneInfo = (groupId) => pick(byLocale(zone, 'zones', groupId)).value ?? nu
 
 const KIND_BY_ENTRY = { MAINLINE: 'main', ACTIVITY: 'side', MINI_ACTIVITY: 'mini', NONE: 'record' };
 
+// ---------------------------------------------------------------------------
+// 세계관 연도(테라 력) 추출
+// ---------------------------------------------------------------------------
+/**
+ * 스토리 스크립트에서 "이 이야기가 벌어지는 연도"를 추정한다.
+ *   - 대상 줄: narration / caption(animtext) / subtitle / sticker  (대사는 과거 회상 언급이 많아 제외)
+ *   - 패턴: 1000~1199년 (한국어 "1098년", 중국어 "1098年")
+ *   - 가중치: 날짜 스탬프 형태("1098년 12월 21일 5:05 P.M.", "1091년 겨울", 줄 첫머리의 연도) 5, 그 외 1
+ *   - "600년 전", "100년 만에" 같은 기간 표현은 제외
+ * 반환: { weights: {연도: 가중치}, evidence: [{year, text}] }
+ */
+const YEAR_RE = /(1[01]\d{2})\s*(년|年)/g;
+const RELATIVE_AFTER_RE = /^\s*(전|만|간|동안|후|넘|가까이|이상|이하|前|后|後|间|多|来)/;
+const STAMP_HINT_RE = /(\d{1,2}\s*(월|月)|\d{1,2}\s*(일|日)|[AP]\.?M\.?|봄|여름|가을|겨울|초|말|春|夏|秋|冬)/;
+const YEAR_LINE_TYPES = new Set(['narration', 'caption', 'subtitle', 'sticker']);
+
+function extractYears(lines) {
+  const weights = {};
+  const evidence = [];
+  for (const line of lines) {
+    if (!YEAR_LINE_TYPES.has(line.type) || !line.text) continue;
+    const text = stripRichText(line.text).replace(/\s+/g, ' ').trim();
+    let m;
+    YEAR_RE.lastIndex = 0;
+    while ((m = YEAR_RE.exec(text))) {
+      const after = text.slice(m.index + m[0].length);
+      if (RELATIVE_AFTER_RE.test(after)) continue; // "600년 전" 등 기간 표현
+      const year = Number(m[1]);
+      const isStamp = text.length <= 80 && (m.index <= 30 || STAMP_HINT_RE.test(after.slice(0, 20)));
+      const w = isStamp ? 5 : 1;
+      weights[year] = (weights[year] ?? 0) + w;
+      if (evidence.length < 6) evidence.push({ year, text: text.slice(0, 80), stamp: isStamp });
+    }
+  }
+  return { weights, evidence };
+}
+
+/** 가중치 맵에서 대표 연도 (동률이면 더 큰 연도 = 현재 시점에 가까운 쪽) */
+function topYear(weights) {
+  let best = null;
+  for (const [y, w] of Object.entries(weights)) {
+    const year = Number(y);
+    if (best === null || w > best.w || (w === best.w && year > best.year)) best = { year, w };
+  }
+  return best ? best.year : null;
+}
+
+/** 인게임 아카이브(story_review_meta_table.actArchiveData) 의 연표에서 연도 목록 */
+function archiveYears(groupId) {
+  const comps = pick(byLocale(storyReviewMeta, 'actArchiveData', 'components')).value ?? {};
+  const list = comps[groupId]?.timeline?.timelineList ?? [];
+  const years = [];
+  for (const t of list) {
+    const m = String(t.timelineTitle ?? '').match(/_year_(\d{4})/);
+    if (m) years.push(Number(m[1]));
+  }
+  return years;
+}
+
 /**
  * 그룹의 "공개 시각" 결정.
  *   우선순위: activity_table.basicInfo.startTime(이벤트 시작) → story_review.startTime → startShowTime
@@ -239,10 +299,12 @@ for (const groupId of unionKeys(storyReview)) {
     let speakers = [];
     let lineCount = 0;
     let dialogueCount = 0;
+    let years = { weights: {}, evidence: [] };
 
     if (script) {
       const { lines, cast } = parseStoryWithMeta(script.text);
       lineCount = lines.length;
+      years = extractYears(lines);
       const charLines = new Map(); // charId → { lines, viaSprite }
       const bump = (charId, n, viaSprite) => {
         const cur = charLines.get(charId) ?? { lines: 0, viaSprite: false };
@@ -299,6 +361,10 @@ for (const groupId of unionKeys(storyReview)) {
       dialogueCount,
       characters,
       speakers,
+      // 세계관 연도 (자동 추출). overrides 적용은 연표 단계에서.
+      loreYear: topYear(years.weights),
+      loreYearWeights: years.weights,
+      loreEvidence: years.evidence,
     };
     stories.push(story);
     storyIndex.set(storyId, story);
@@ -311,16 +377,27 @@ for (const groupId of unionKeys(storyReview)) {
 log(`  그룹 ${groups.length}개, 스토리 ${stories.length}편 (원문 없음 ${missingText}편)`);
 
 // ---------------------------------------------------------------------------
-// 4. 연표 (timeline.json)
+// 4. 연표 (timeline.json) — 세계관 연도(테라 력) 기준
 // ---------------------------------------------------------------------------
 log('연표…');
 
 /**
- * TODO(timeline): 현재 정렬 기준은 "게임 내 공개(출시) 시각" 이다.
- *   테라 세계관 내 연대(예: 1098년)는 게임 데이터에 구조화되어 있지 않으므로,
- *   overrides/timeline.json 에 { "<groupId>": { "loreDate": "1098-10", "loreLabel": "…", "order": 12 } }
- *   형태로 수동 입력하면 여기서 병합되어 timeline.json 의 lore 필드로 나간다.
- *   /timeline 페이지에서 lore 기준 정렬 토글을 만들 때 이 필드를 사용하면 된다.
+ * 연표 정렬 기준은 "스토리 안에서 벌어지는 연도" 이다. (게임 출시일이 아님)
+ * 연도 결정 우선순위:
+ *   1. overrides/timeline.json 의 loreYear  (수동, 최우선)
+ *   2. 인게임 아카이브 연표 (story_review_meta_table.actArchiveData, 일부 이벤트만 존재)
+ *   3. 스크립트 텍스트의 날짜 스탬프에서 자동 추출 (extractYears)
+ *   4. 없음 → 연표 끝의 "연대 미상" 구역에 출시 순으로 배치
+ *
+ * overrides/timeline.json 형식:
+ *   { "<groupId>": { "loreYear": 1098, "loreLabel": "1098년 봄", "loreOrder": 3,
+ *                    "stories": { "<storyId>": { "loreYear": 1030 } } } }
+ *   - loreOrder: 같은 연도 안에서의 순서 (작을수록 앞). 없으면 출시 시각 순.
+ *   - stories: 회상/과거편 등 그룹과 다른 연도의 개별 스토리 보정.
+ *
+ * TODO(timeline): 자동 추출은 연도가 텍스트에 명시된 이벤트만 잡는다. meta.json 의
+ *   counts.timelineUnresolved 와 timeline.json 의 loreSource === null 항목을 보고 overrides 를 채울 것.
+ *   각 항목의 loreEvidence 에 추출 근거 문장이 들어 있으니 검수에 활용.
  */
 let overrides = {};
 const overridesFile = path.join(OVERRIDES_DIR, 'timeline.json');
@@ -329,26 +406,80 @@ if (fs.existsSync(overridesFile)) {
   log(`  overrides/timeline.json 적용 (${Object.keys(overrides).length}건)`);
 }
 
+function resolveGroupYear(g) {
+  const ov = overrides[g.id] ?? {};
+  if (Number.isInteger(ov.loreYear)) return { loreYear: ov.loreYear, loreSource: 'override', evidence: [] };
+
+  const fromArchive = archiveYears(g.id);
+  if (fromArchive.length) {
+    return { loreYear: Math.min(...fromArchive), loreSource: 'archive', evidence: fromArchive.map((y) => ({ year: y, text: '인게임 아카이브 연표' })) };
+  }
+
+  const weights = {};
+  const evidence = [];
+  for (const sid of g.storyIds) {
+    const st = storyIndex.get(sid);
+    for (const [y, w] of Object.entries(st.loreYearWeights ?? {})) weights[y] = (weights[y] ?? 0) + w;
+    for (const e of st.loreEvidence ?? []) if (e.stamp && evidence.length < 8) evidence.push({ ...e, storyId: sid });
+  }
+  const year = topYear(weights);
+  return { loreYear: year, loreSource: year ? 'text' : null, evidence };
+}
+
 const timeline = groups
-  .filter((g) => g.kind !== 'record' && g.timestamp > 0)
-  .map((g) => ({
-    id: g.id,
-    name: g.name,
-    kind: g.kind,
-    displayType: g.displayType,
-    chapter: g.chapter,
-    date: g.date,
-    timestamp: g.timestamp,
-    timestampLocale: g.timestampLocale,
-    lore: overrides[g.id] ?? null,
-    locale: g.locale,
-    needsTranslation: g.needsTranslation,
-    stories: g.storyIds.map((sid) => {
-      const s = storyIndex.get(sid);
-      return { id: s.id, code: s.code, name: s.name, avgTag: s.avgTag, available: s.available };
-    }),
-  }))
-  .sort((a, b) => a.timestamp - b.timestamp || a.id.localeCompare(b.id));
+  .filter((g) => g.kind !== 'record')
+  .map((g) => {
+    const ov = overrides[g.id] ?? {};
+    const { loreYear, loreSource, evidence } = resolveGroupYear(g);
+    return {
+      id: g.id,
+      name: g.name,
+      kind: g.kind,
+      displayType: g.displayType,
+      chapter: g.chapter,
+      // 세계관 연도
+      loreYear,
+      loreLabel: ov.loreLabel ?? (loreYear ? `${loreYear}년` : null),
+      loreSource,
+      loreOrder: Number.isFinite(ov.loreOrder) ? ov.loreOrder : null,
+      loreEvidence: evidence,
+      // 참고용 출시 정보
+      releaseDate: g.date,
+      releaseTimestamp: g.timestamp,
+      releaseLocale: g.timestampLocale,
+      locale: g.locale,
+      needsTranslation: g.needsTranslation,
+      stories: g.storyIds.map((sid) => {
+        const s = storyIndex.get(sid);
+        const sov = ov.stories?.[sid] ?? {};
+        const storyYear = Number.isInteger(sov.loreYear) ? sov.loreYear : s.loreYear;
+        return {
+          id: s.id,
+          code: s.code,
+          name: s.name,
+          avgTag: s.avgTag,
+          available: s.available,
+          // 그룹 연도와 다를 때만 표시용으로 의미 있음 (회상 등)
+          loreYear: storyYear,
+        };
+      }),
+    };
+  })
+  .sort((a, b) => {
+    // 연도 있는 것 먼저(오름차순), 없는 것은 뒤로(출시 순)
+    if (a.loreYear !== b.loreYear) {
+      if (a.loreYear === null) return 1;
+      if (b.loreYear === null) return -1;
+      return a.loreYear - b.loreYear;
+    }
+    const ao = a.loreOrder ?? Number.POSITIVE_INFINITY;
+    const bo = b.loreOrder ?? Number.POSITIVE_INFINITY;
+    if (ao !== bo) return ao - bo;
+    return a.releaseTimestamp - b.releaseTimestamp || a.id.localeCompare(b.id);
+  });
+
+const unresolved = timeline.filter((t) => t.loreYear === null);
+log(`  연도 확정 ${timeline.length - unresolved.length}건 / 미상 ${unresolved.length}건`);
 
 // 스토리에 연표 순번 부여 (오퍼레이터 등장 목록 정렬용)
 const groupOrder = new Map(timeline.map((g, i) => [g.id, i]));
@@ -477,6 +608,8 @@ write('meta.json', {
     storiesFallback: stories.filter((s) => s.needsTranslation).length,
     operators: operatorList.length,
     timeline: timeline.length,
+    timelineUnresolved: unresolved.length,
+    timelineBySource: timeline.reduce((acc, t) => ((acc[t.loreSource ?? 'none'] = (acc[t.loreSource ?? 'none'] ?? 0) + 1), acc), {}),
   },
 });
 

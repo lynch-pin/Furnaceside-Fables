@@ -60,6 +60,12 @@ jobs:
       - name: Show data versions
         run: cat src/data/meta.json
 
+      # Pages 가 아직 켜져 있지 않으면 켜기를 시도한다 (권한이 없으면 Settings → Pages 에서 수동으로 Source: GitHub Actions).
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
       - name: Build
         run: npm run build
 

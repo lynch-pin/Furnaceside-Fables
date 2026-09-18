@@ -10,8 +10,12 @@ const meta = loadMeta();
 const { stories } = loadStories();
 const operators = loadOperators();
 
-// 최근 공개된 스토리 그룹 8개 (연표는 오래된 순이므로 뒤에서부터)
-const recent = [...timeline].reverse().slice(0, 8);
+// 연표 미리보기: 세계관 연도별 이벤트 수 (연대 미상은 제외)
+const yearCounts = new Map<number, number>();
+for (const g of timeline) if (g.loreYear) yearCounts.set(g.loreYear, (yearCounts.get(g.loreYear) ?? 0) + 1);
+const unresolved = timeline.filter((g) => !g.loreYear).length;
+// 최근 출시 이벤트 5개 (참고용)
+const recent = [...timeline].sort((a, b) => b.releaseTimestamp - a.releaseTimestamp).slice(0, 5);
 ---
 
 <Layout>
@@ -40,19 +44,42 @@ const recent = [...timeline].reverse().slice(0, 8);
     </section>
 
     <section>
-      <h2>최근 공개</h2>
+      <h2>연표 미리보기</h2>
+      <p class="muted small">테라 력 기준. 연도를 누르면 해당 구간으로 이동합니다.</p>
+      <ul class="list-plain years">
+        {[...yearCounts.entries()].map(([year, n]) => (
+          <li>
+            <a class="card years__item" href={`/timeline#y-${year}`}>
+              <strong>{year}년</strong>
+              <span class="muted small">{n}개 이벤트</span>
+            </a>
+          </li>
+        ))}
+        {unresolved > 0 && (
+          <li>
+            <a class="card years__item" href="/timeline#y-unknown">
+              <strong>연대 미상</strong>
+              <span class="muted small">{unresolved}개 이벤트</span>
+            </a>
+          </li>
+        )}
+      </ul>
+      <p><a href="/timeline">전체 연표 보기 →</a></p>
+    </section>
+
+    <section>
+      <h2>최근 출시 <span class="muted small">(참고)</span></h2>
       <ol class="list-plain preview">
         {recent.map((g) => (
           <li class="preview__item">
-            <span class="preview__date muted small">{g.date}</span>
+            <span class="preview__date muted small">{g.releaseDate}</span>
             <span class="badge">{KIND_LABEL[g.kind]}</span>
             <a href={`/timeline#${g.id}`}>{g.name}</a>
             {g.needsTranslation && <span class="badge badge--fallback">zh_CN</span>}
-            <span class="muted small">{g.stories.length}편</span>
+            <span class="muted small">{g.loreYear ? `${g.loreYear}년` : '연대 미상'}</span>
           </li>
         ))}
       </ol>
-      <p><a href="/timeline">전체 연표 보기 →</a></p>
     </section>
 
     <p class="small muted">
@@ -77,6 +104,17 @@ const recent = [...timeline].reverse().slice(0, 8);
   .quick__item {
     display: flex;
     flex-direction: column;
+    color: inherit;
+  }
+  .years {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+    gap: 0.5rem;
+  }
+  .years__item {
+    display: flex;
+    flex-direction: column;
+    padding: 0.6rem 0.8rem;
     color: inherit;
   }
   .preview__item {

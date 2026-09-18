@@ -1,57 +1,81 @@
 ---
 /**
- * /timeline — 스토리 연표 (공개 시간순). 각 스토리는 클릭 시 리더로 이동.
+ * /timeline — 스토리 연표. 정렬 기준은 스토리 안에서 벌어지는 세계관 연도(테라 력).
+ *   - 연도는 scripts/process-data.mjs 가 overrides → 인게임 아카이브 → 스크립트 날짜 스탬프 순으로 결정
+ *   - 연도를 못 찾은 이벤트는 마지막 "연대 미상" 구역에 출시 순으로
+ *   - 각 스토리는 클릭(터치) 시 리더로 이동
  *
- * TODO(timeline): 세계관 연대(lore) 기준 정렬 토글. timeline.json 의 각 항목에 `lore` 필드가
- *   채워지면(overrides/timeline.json) 그 값으로 정렬하는 두 번째 뷰를 추가.
+ * TODO(timeline): loreSource === 'text' 는 자동 추정이므로 검수 후 overrides/timeline.json 에 확정값을 넣을 것.
  */
 import Layout from '../layouts/Layout.astro';
 import { loadTimeline, KIND_LABEL } from '../lib/data.mjs';
 
 const timeline = loadTimeline();
 
-// 연도별로 묶기
+const SOURCE_LABEL: Record<string, string> = {
+  override: '확정',
+  archive: '인게임 아카이브',
+  text: '자동 추정',
+};
+
+// 연도별로 묶기 (null 은 "연대 미상")
+const UNKNOWN = '연대 미상';
 const byYear = new Map<string, typeof timeline>();
 for (const g of timeline) {
-  const year = (g.date ?? '????').slice(0, 4);
-  if (!byYear.has(year)) byYear.set(year, []);
-  byYear.get(year)!.push(g);
+  const key = g.loreYear ? String(g.loreYear) : UNKNOWN;
+  if (!byYear.has(key)) byYear.set(key, []);
+  byYear.get(key)!.push(g);
 }
+const anchor = (key: string) => (key === UNKNOWN ? 'y-unknown' : `y-${key}`);
+const heading = (key: string) => (key === UNKNOWN ? UNKNOWN : `${key}년`);
 ---
 
 <Layout title="연표">
   <div class="container">
     <h1>연표</h1>
     <p class="muted small">
-      게임 내 공개 순서(한국 서버 기준, 미출시 콘텐츠는 중국 서버 날짜). 스토리 제목을 누르면 리더로 이동합니다.
+      테라 력 기준. 연도는 스토리 본문의 날짜 표기와 인게임 아카이브에서 추출했으며, "자동 추정" 표시는 검수 전입니다.
+      연도가 확인되지 않은 이벤트는 맨 아래 "연대 미상"에 출시 순으로 있습니다. 스토리 제목을 누르면 리더로 이동합니다.
     </p>
 
     <nav class="years" aria-label="연도">
-      {[...byYear.keys()].map((y) => <a href={`#y-${y}`}>{y}</a>)}
+      {[...byYear.keys()].map((y) => (
+        <a href={`#${anchor(y)}`}>{heading(y)} <span class="muted small">{byYear.get(y)!.length}</span></a>
+      ))}
     </nav>
 
     {[...byYear.entries()].map(([year, groups]) => (
-      <section class="year" id={`y-${year}`}>
-        <h2>{year}</h2>
+      <section class="year" id={anchor(year)}>
+        <h2>{heading(year)}</h2>
         <ol class="list-plain events">
           {groups.map((g) => (
             <li class="event" id={g.id}>
               <div class="event__head">
-                <time class="event__date" datetime={g.date}>{g.date}</time>
                 <span class="badge">{g.chapter?.label ?? KIND_LABEL[g.kind]}</span>
                 <h3 class="event__title">
                   {g.name}
                   {g.needsTranslation && <span class="badge badge--fallback">zh_CN</span>}
                 </h3>
+                {g.loreLabel && g.loreLabel !== `${g.loreYear}년` && <span class="lore-label">{g.loreLabel}</span>}
+                {g.loreSource && (
+                  <span
+                    class:list={['source', `source--${g.loreSource}`]}
+                    title={g.loreEvidence?.map((e: any) => e.text).join('\n') || undefined}
+                  >
+                    {SOURCE_LABEL[g.loreSource]}
+                  </span>
+                )}
+                <span class="release muted small" title="게임 내 공개일 (참고)">출시 {g.releaseDate ?? '-'}</span>
               </div>
               <ul class="list-plain stories">
-                {g.stories.map((s) => (
+                {g.stories.map((s: any) => (
                   <li>
                     {s.available ? (
                       <a class="story-link" href={`/story/${s.id}`}>
                         {s.code && <span class="code">{s.code}</span>}
                         <span>{s.name}</span>
                         {s.avgTag && <span class="muted small">{s.avgTag}</span>}
+                        {s.loreYear && s.loreYear !== g.loreYear && <span class="story-year">{s.loreYear}년</span>}
                       </a>
                     ) : (
                       <span class="story-link muted">
@@ -113,14 +137,30 @@ for (const g of timeline) {
     align-items: center;
     gap: 0.5rem 0.75rem;
   }
-  .event__date {
-    font-family: var(--font-sans);
-    font-size: 0.85rem;
-    color: var(--color-muted);
-  }
   .event__title {
     margin: 0;
     font-size: 1.15rem;
+  }
+  .lore-label {
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+  }
+  .source {
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    padding: 0.2em 0.5em;
+    border-radius: 3px;
+    border: 1px solid var(--color-line);
+    color: var(--color-muted);
+    cursor: help;
+  }
+  .source--override {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+  .release {
+    font-family: var(--font-sans);
+    margin-left: auto;
   }
   .stories {
     display: flex;
@@ -147,5 +187,10 @@ for (const g of timeline) {
     font-family: var(--font-sans);
     font-size: 0.75rem;
     color: var(--color-accent);
+  }
+  .story-year {
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    color: var(--color-muted);
   }
 </style>
