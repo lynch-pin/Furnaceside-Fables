@@ -103,6 +103,18 @@ const isActive = (href: string) => (href === '/' ? current === '/' : current.sta
       <slot />
     </main>
 
+    <!-- 맨 위로 (스크롤 후 표시) -->
+    <button class="to-top" id="to-top" type="button" aria-label="맨 위로" title="맨 위로" hidden>↑</button>
+    <script>
+      const toTop = document.getElementById('to-top')!;
+      const update = () => {
+        toTop.hidden = window.scrollY < 400;
+      };
+      window.addEventListener('scroll', update, { passive: true });
+      toTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+      update();
+    </script>
+
     <footer class="site-footer">
       <div class="container small muted">
         <p>
@@ -167,6 +179,28 @@ const isActive = (href: string) => (href === '/' ? current === '/' : current.sta
       .site-main {
         flex: 1;
         padding: 2rem 0 3rem;
+      }
+      .to-top {
+        position: fixed;
+        right: 1rem;
+        bottom: 1rem;
+        width: 2.4rem;
+        height: 2.4rem;
+        border-radius: 50%;
+        border: 1px solid var(--color-line);
+        background: var(--color-card);
+        color: var(--color-fg);
+        font: inherit;
+        font-size: 1rem;
+        line-height: 1;
+        cursor: pointer;
+        opacity: 0.85;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        z-index: 10;
+      }
+      .to-top:hover {
+        opacity: 1;
+        border-color: var(--color-accent);
       }
       .site-footer {
         border-top: 1px solid var(--color-line);

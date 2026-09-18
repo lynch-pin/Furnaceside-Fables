@@ -14,12 +14,8 @@ const operators = loadOperators();
 const yearCounts = new Map<number, number>();
 for (const t of timeline) if (t.loreYear) yearCounts.set(t.loreYear, (yearCounts.get(t.loreYear) ?? 0) + 1);
 const unresolved = timeline.filter((t) => !t.loreYear).length;
-// 최근 출시 이벤트 5개 (참고용, 그룹 단위로 중복 제거)
-const seen = new Set<string>();
-const recent = [...timeline]
-  .sort((a, b) => b.releaseTimestamp - a.releaseTimestamp)
-  .filter((t) => (seen.has(t.groupId) ? false : (seen.add(t.groupId), true)))
-  .slice(0, 5);
+// 최근 출시 이벤트 5개 (참고용)
+const recent = [...timeline].sort((a, b) => b.releaseTimestamp - a.releaseTimestamp).slice(0, 5);
 ---
 
 <Layout>
@@ -33,7 +29,7 @@ const recent = [...timeline]
     <section class="quick">
       <a class="card quick__item" href="/timeline">
         <strong>연표</strong>
-        <span class="muted small">{timeline.length}편 · 테라 력 순</span>
+        <span class="muted small">{timeline.length}개 이벤트 · 테라 력 순</span>
       </a>
       <a class="card quick__item" href="/story">
         <strong>스토리</strong>
@@ -53,7 +49,7 @@ const recent = [...timeline]
           <li>
             <a class="card years__item" href={`/timeline#y-${year}`}>
               <strong>{year}년</strong>
-              <span class="muted small">{n}편</span>
+              <span class="muted small">{n}개 이벤트</span>
             </a>
           </li>
         ))}
@@ -61,7 +57,7 @@ const recent = [...timeline]
           <li>
             <a class="card years__item" href="/timeline#y-unknown">
               <strong>연대 미상</strong>
-              <span class="muted small">{unresolved}편</span>
+              <span class="muted small">{unresolved}개 이벤트</span>
             </a>
           </li>
         )}
@@ -76,7 +72,7 @@ const recent = [...timeline]
           <li class="preview__item">
             <span class="preview__date muted small">{g.releaseDate}</span>
             <span class="badge">{KIND_LABEL[g.kind]}</span>
-            <a href={`/story#${g.groupId}`}>{g.groupName}</a>
+            <a href={`/timeline#${g.id}`}>{g.name}</a>
             {g.sourceLocale === 'zh_CN' && <span class="badge badge--fallback">CN server</span>}
             <span class="muted small">{g.loreYear ? `${g.loreYear}년` : '연대 미상'}</span>
           </li>
