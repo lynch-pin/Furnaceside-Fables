@@ -1,1 +1,66 @@
-{}
+{
+  "_comment": "세계관 연도 확정값. 출처: 커뮤니티 연표(사용자 제공). loreOrder 는 같은 연도 안의 순서. keepStoryYears: true 면 회상 등 개별 스토리의 날짜 스탬프가 그룹 연도보다 우선.",
+
+  "act9d0":   { "loreYear": 1094, "loreLabel": "~1094년 (바벨 시기)", "loreOrder": 10 },
+  "act33side": { "loreYear": 1094, "loreLabel": "1094년까지 (회상 포함)", "loreOrder": 20, "keepStoryYears": true },
+
+  "main_0":   { "loreYear": 1096, "loreLabel": "1096년 12월 ~ 1097년 1월", "loreOrder": 10 },
+  "main_1":   { "loreYear": 1096, "loreLabel": "1096년 12월 ~ 1097년 1월", "loreOrder": 11 },
+  "main_2":   { "loreYear": 1096, "loreLabel": "1096년 12월 ~ 1097년 1월", "loreOrder": 12 },
+  "main_3":   { "loreYear": 1096, "loreLabel": "1096년 12월 ~ 1097년 1월", "loreOrder": 13 },
+  "main_4":   { "loreYear": 1096, "loreLabel": "1096년 12월 ~ 1097년 1월", "loreOrder": 14 },
+  "main_5":   { "loreYear": 1096, "loreLabel": "1096년 12월 ~ 1097년 1월", "loreOrder": 15 },
+  "main_6":   { "loreYear": 1096, "loreLabel": "1096년 12월 ~ 1097년 1월", "loreOrder": 16 },
+  "main_7":   { "loreYear": 1096, "loreLabel": "1096년 12월 ~ 1097년 1월", "loreOrder": 17 },
+  "main_8":   { "loreYear": 1096, "loreLabel": "1096년 12월 ~ 1097년 1월 (회상 1089·1095년 포함)", "loreOrder": 18, "keepStoryYears": true },
+  "act10d5":  { "loreYear": 1096, "loreLabel": "1096년 12월", "loreOrder": 19 },
+
+  "act15d5":  { "loreYear": 1097, "loreLabel": "1097년 1~2월", "loreOrder": 10 },
+  "act8mini": { "loreYear": 1097, "loreLabel": "1097년 4~5월 (바벨 시기 회상 포함)", "loreOrder": 20, "keepStoryYears": true },
+  "1stact":   { "loreYear": 1097, "loreLabel": "1097년 5~6월", "loreOrder": 30 },
+  "act3d0":   { "loreYear": 1097, "loreLabel": "1097년 여름", "loreOrder": 40 },
+  "act12side": { "loreYear": 1097, "loreLabel": "1097년 여름", "loreOrder": 41 },
+  "act15d0":  { "loreYear": 1097, "loreLabel": "1097년 여름 (탈옥은 1~2월)", "loreOrder": 42 },
+  "act13d5":  { "loreYear": 1097, "loreLabel": "1097년 9~10월", "loreOrder": 50 },
+  "act9mini": { "loreYear": 1097, "loreLabel": "1097년 9~10월", "loreOrder": 51 },
+  "act13side": { "loreYear": 1097, "loreLabel": "1097년 10월 24일 ~ 11월 17일", "loreOrder": 60 },
+  "act5d0":   { "loreYear": 1097, "loreLabel": "1097년 10월 31일 ~ 11월 1일", "loreOrder": 61 },
+  "act11d0":  { "loreYear": 1097, "loreLabel": "1097년 가을", "loreOrder": 62 },
+  "act10mini": { "loreYear": 1097, "loreLabel": "1097년 11월 26일 ~ 12월 21일", "loreOrder": 70 },
+  "act12mini": { "loreYear": 1097, "loreLabel": "1097년 11~12월", "loreOrder": 71 },
+  "main_9":   { "loreYear": 1097, "loreLabel": "1097년 가을~겨울", "loreOrder": 80 },
+  "act14side": { "loreYear": 1097, "loreLabel": "1097년 겨울", "loreOrder": 90 },
+
+  "act6d5":   { "loreYear": 1098, "loreLabel": "1098년 1월 1일", "loreOrder": 10 },
+  "main_10":  { "loreYear": 1098, "loreLabel": "1098년 봄", "loreOrder": 20 },
+  "main_11":  { "loreYear": 1098, "loreLabel": "1098년 봄", "loreOrder": 21 },
+  "act22side": { "loreYear": 1098, "loreLabel": "1098년 봄 (11장 직후)", "loreOrder": 22 },
+  "main_12":  { "loreYear": 1098, "loreLabel": "1098년 봄", "loreOrder": 23 },
+  "main_13":  { "loreYear": 1098, "loreLabel": "1098년 봄", "loreOrder": 24 },
+  "main_14":  { "loreYear": 1098, "loreLabel": "1098년 봄", "loreOrder": 25 },
+  "act12d0":  { "loreYear": 1098, "loreLabel": "1098년 여름 (회상은 1097년 여름)", "loreOrder": 30 },
+  "act18d0":  { "loreYear": 1098, "loreLabel": "1098년 (회상 1076·1081·1085년 포함)", "loreOrder": 40, "keepStoryYears": true },
+  "act18d3":  { "loreYear": 1098, "loreLabel": "1098년 연말", "loreOrder": 50 },
+
+  "act17side": { "loreYear": 1099, "loreLabel": "1099년 (언더 타이즈 직후)", "loreOrder": 10 },
+  "act16side": { "loreYear": 1099, "loreLabel": "1099년 3월 15일 ~ 18일", "loreOrder": 20 },
+  "act20side": { "loreYear": 1099, "loreLabel": "1099년 여름", "loreOrder": 30 },
+  "act27side": { "loreYear": 1099, "loreLabel": "1099년 9월", "loreOrder": 40 },
+  "act21side": { "loreYear": 1099, "loreLabel": "1099년 가을~겨울", "loreOrder": 50 },
+  "act26side": { "loreYear": 1099, "loreLabel": "1099년 10월", "loreOrder": 60 },
+  "act18side": { "loreYear": 1099, "loreLabel": "1099년 10월", "loreOrder": 61 },
+  "act19side": { "loreYear": 1099, "loreLabel": "1099년 10월", "loreOrder": 62 },
+  "act25side": { "loreYear": 1099, "loreLabel": "1099년 11월 21일", "loreOrder": 70 },
+  "act15mini": { "loreYear": 1099, "loreLabel": "1099년 연말", "loreOrder": 80 },
+
+  "act28side": { "loreYear": 1100, "loreLabel": "1099년 12월 말 ~ 1100년 1월", "loreOrder": 10 },
+  "act29side": { "loreYear": 1100, "loreLabel": "1100년 가을", "loreOrder": 20 },
+  "act30side": { "loreYear": 1100, "loreLabel": "1100년 겨울", "loreOrder": 30 },
+
+  "act16d5":  { "loreYear": 1101, "loreLabel": "1101년 가을", "loreOrder": 10 },
+  "act15side": { "loreYear": 1101, "loreLabel": "1101년 가을", "loreOrder": 11 },
+
+  "act23side": { "loreYear": 1102, "loreLabel": "1102년 봄", "loreOrder": 10 },
+  "act14mini": { "loreYear": 1102, "loreLabel": "1102년 봄", "loreOrder": 11 },
+  "act31side": { "loreYear": 1102, "loreLabel": "1102년 여름", "loreOrder": 20 }
+}

@@ -1,10 +1,9 @@
 ---
 /**
  * /operator — 오퍼레이터 목록.
- *   - 희귀도(★) 섹션 + 희귀도 숏컷(앵커 이동)
- *   - 직군 숏컷(클라이언트 필터): 뱅가드/가드/디펜더/스나이퍼/캐스터/메딕/서포터/스페셜리스트
+ *   - 희귀도(★) 섹션. 희귀도·직군은 다중 선택 토글 필터(스크롤 이동 없음), 이름/영문명 검색
  *   - 아바타 썸네일
- * TODO(operator-list): 진영 필터, 이름 검색.
+ * TODO(operator-list): 진영 필터.
  */
 import Layout from '../../layouts/Layout.astro';
 import SourceBadge from '../../components/SourceBadge.astro';
@@ -30,29 +29,38 @@ const op_locale = (o: any) => o.sourceLocale ?? o.locale ?? null;
     <h1>오퍼레이터</h1>
     <p class="muted small">{operators.length}명. 이름을 누르면 기록 / 대사 / 오퍼레이터 레코드 / 등장 스토리를 볼 수 있습니다.</p>
 
-    <nav class="shortcuts" aria-label="희귀도">
-      <span class="shortcuts__label">희귀도</span>
-      {rarities.map((r) => (
-        <a href={`#r-${r}`}>{stars(r)} <span class="muted small">{byRarity.get(r)!.length}</span></a>
-      ))}
-    </nav>
+    <div class="filters">
+      <label class="search">
+        <span class="shortcuts__label">검색</span>
+        <input type="search" id="op-search" placeholder="오퍼레이터 이름 / 영문명" autocomplete="off" />
+      </label>
 
-    <div class="shortcuts" role="group" aria-label="직군 필터" id="profession-filter">
-      <span class="shortcuts__label">직군</span>
-      <button type="button" data-profession="" aria-pressed="true">전체</button>
-      {PROFESSIONS.map((p) => (
-        <button type="button" data-profession={p} aria-pressed="false">
-          {PROFESSION_LABEL[p]} <span class="muted small">{professionCount(p)}</span>
-        </button>
-      ))}
+      <div class="shortcuts" role="group" aria-label="희귀도 필터" id="rarity-filter">
+        <span class="shortcuts__label">희귀도</span>
+        <button type="button" data-all aria-pressed="true">전체</button>
+        {rarities.map((r) => (
+          <button type="button" data-value={r} aria-pressed="true">{stars(r)} <span class="muted small">{byRarity.get(r)!.length}</span></button>
+        ))}
+      </div>
+
+      <div class="shortcuts" role="group" aria-label="직군 필터" id="profession-filter">
+        <span class="shortcuts__label">직군</span>
+        <button type="button" data-all aria-pressed="true">전체</button>
+        {PROFESSIONS.map((p) => (
+          <button type="button" data-value={p} aria-pressed="true">
+            {PROFESSION_LABEL[p]} <span class="muted small">{professionCount(p)}</span>
+          </button>
+        ))}
+      </div>
     </div>
+    <p class="muted small" id="op-result"></p>
 
     {rarities.map((r) => (
-      <section id={`r-${r}`} class="rarity">
+      <section id={`r-${r}`} class="rarity" data-rarity={r}>
         <h2>{stars(r)} <span class="muted small count" data-total={byRarity.get(r)!.length}>{byRarity.get(r)!.length}</span></h2>
         <ul class="list-plain grid">
           {byRarity.get(r)!.map((o) => (
-            <li data-profession={o.profession}>
+            <li data-profession={o.profession} data-name={`${o.name} ${o.appellation}`.toLowerCase()}>
               <a class="card op" href={`/operator/${o.id}`}>
                 {o.avatar ? <img class="avatar" src={o.avatar} alt="" loading="lazy" decoding="async" /> : <span class="avatar" />}
                 <span class="op__text">
@@ -67,39 +75,121 @@ const op_locale = (o: any) => o.sourceLocale ?? o.locale ?? null;
             </li>
           ))}
         </ul>
-        <p class="muted small empty" hidden>이 희귀도에는 선택한 직군의 오퍼레이터가 없습니다.</p>
+        <p class="muted small empty" hidden>조건에 맞는 오퍼레이터가 없습니다.</p>
       </section>
     ))}
   </div>
 </Layout>
 
 <script>
-  // 직군 필터: data-profession 이 일치하지 않는 카드를 숨긴다. URL 해시(#p=WARRIOR)로 초기 상태 복원.
-  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('#profession-filter button'));
-  const cards = Array.from(document.querySelectorAll<HTMLLIElement>('.grid > li'));
-  const apply = (prof: string) => {
-    for (const b of buttons) b.setAttribute('aria-pressed', String((b.dataset.profession ?? '') === prof));
-    for (const c of cards) c.hidden = Boolean(prof) && c.dataset.profession !== prof;
-    document.querySelectorAll<HTMLElement>('.rarity').forEach((sec) => {
-      const visible = sec.querySelectorAll('.grid > li:not([hidden])').length;
-      const count = sec.querySelector<HTMLElement>('.count');
-      if (count) count.textContent = String(visible);
-      const empty = sec.querySelector<HTMLElement>('.empty');
-      if (empty) empty.hidden = visible > 0;
-    });
+  // 필터: 희귀도·직군은 다중 선택 토글(on/off). "전체" 는 모두 켜기. 검색은 이름/영문명 부분 일치.
+  // 상태는 URL 해시(#r=6,5&p=WARRIOR,SNIPER&q=아미야)에 저장해 새로고침/공유 시 복원.
+  type Group = { root: HTMLElement; all: HTMLButtonElement; items: HTMLButtonElement[] };
+  const group = (id: string): Group => {
+    const root = document.getElementById(id)!;
+    return {
+      root,
+      all: root.querySelector<HTMLButtonElement>('[data-all]')!,
+      items: Array.from(root.querySelectorAll<HTMLButtonElement>('[data-value]')),
+    };
   };
-  for (const b of buttons) {
-    b.addEventListener('click', () => {
-      const prof = b.dataset.profession ?? '';
-      apply(prof);
-      history.replaceState(null, '', prof ? `#p=${prof}` : location.pathname);
+  const rarity = group('rarity-filter');
+  const profession = group('profession-filter');
+  const search = document.getElementById('op-search') as HTMLInputElement;
+  const result = document.getElementById('op-result')!;
+  const sections = Array.from(document.querySelectorAll<HTMLElement>('.rarity'));
+  const cards = Array.from(document.querySelectorAll<HTMLLIElement>('.grid > li'));
+
+  const on = (b: HTMLButtonElement) => b.getAttribute('aria-pressed') === 'true';
+  const set = (b: HTMLButtonElement, v: boolean) => b.setAttribute('aria-pressed', String(v));
+  const selected = (g: Group) => new Set(g.items.filter(on).map((b) => b.dataset.value!));
+
+  const apply = () => {
+    const rs = selected(rarity);
+    const ps = selected(profession);
+    const q = search.value.trim().toLowerCase();
+    let visible = 0;
+    for (const sec of sections) {
+      const secOn = rs.has(sec.dataset.rarity!);
+      let secVisible = 0;
+      for (const li of Array.from(sec.querySelectorAll<HTMLLIElement>('.grid > li'))) {
+        const show = secOn && ps.has(li.dataset.profession!) && (!q || (li.dataset.name ?? '').includes(q));
+        li.hidden = !show;
+        if (show) secVisible++;
+      }
+      sec.hidden = !secOn;
+      const count = sec.querySelector<HTMLElement>('.count');
+      if (count) count.textContent = String(secVisible);
+      const empty = sec.querySelector<HTMLElement>('.empty');
+      if (empty) empty.hidden = secVisible > 0;
+      visible += secVisible;
+    }
+    for (const g of [rarity, profession]) set(g.all, g.items.every(on));
+    result.textContent = visible === cards.length ? '' : `${visible}명 표시 중`;
+    // 해시 갱신 (모두 선택이면 생략)
+    const parts: string[] = [];
+    if (!rarity.items.every(on)) parts.push(`r=${[...rs].join(',')}`);
+    if (!profession.items.every(on)) parts.push(`p=${[...ps].join(',')}`);
+    if (q) parts.push(`q=${encodeURIComponent(q)}`);
+    history.replaceState(null, '', parts.length ? `#${parts.join('&')}` : location.pathname);
+  };
+
+  for (const g of [rarity, profession]) {
+    g.all.addEventListener('click', () => {
+      // 전체: 모두 켜기. 이미 모두 켜져 있으면 모두 끄기(빠른 단일 선택용)
+      const every = g.items.every(on);
+      for (const b of g.items) set(b, !every);
+      apply();
     });
+    for (const b of g.items) {
+      b.addEventListener('click', () => {
+        set(b, !on(b));
+        apply();
+      });
+    }
   }
-  const m = location.hash.match(/^#p=([A-Z]+)$/);
-  if (m) apply(m[1]);
+  search.addEventListener('input', apply);
+
+  // 해시 복원
+  const params = new URLSearchParams(location.hash.slice(1));
+  const restore = (g: Group, key: string) => {
+    const v = params.get(key);
+    if (!v) return;
+    const want = new Set(v.split(','));
+    for (const b of g.items) set(b, want.has(b.dataset.value!));
+  };
+  restore(rarity, 'r');
+  restore(profession, 'p');
+  if (params.get('q')) search.value = params.get('q')!;
+  apply();
 </script>
 
 <style>
+  .filters {
+    display: grid;
+    gap: 0.25rem;
+    margin-bottom: 0.5rem;
+  }
+  .search {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-sans);
+  }
+  .search input {
+    font: inherit;
+    font-size: 0.95rem;
+    padding: 0.4rem 0.7rem;
+    border: 1px solid var(--color-line);
+    border-radius: 999px;
+    background: var(--color-card);
+    color: var(--color-fg);
+    width: min(100%, 22rem);
+  }
+  .search input:focus {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+  }
   .rarity h2 {
     position: sticky;
     top: 0;

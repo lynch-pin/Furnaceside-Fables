@@ -1,7 +1,8 @@
 ---
 /**
  * /story — 스토리 목록 (그룹별, 썸네일 포함)
- * TODO(story-list): 검색 / 종류 필터 확장.
+ *   - 이벤트 이름 검색 (클라이언트)
+ * TODO(story-list): 스토리 제목까지 검색 확장.
  */
 import Layout from '../../layouts/Layout.astro';
 import SourceBadge from '../../components/SourceBadge.astro';
@@ -23,18 +24,23 @@ const sections = ORDER.map((kind) => ({
 <Layout title="스토리">
   <div class="container">
     <h1>스토리</h1>
+    <label class="search">
+      <span class="shortcuts__label">검색</span>
+      <input type="search" id="story-search" placeholder="이벤트 이름" autocomplete="off" />
+    </label>
     <nav class="shortcuts" aria-label="종류">
       {sections.map((s) => (
         <a href={`#k-${s.kind}`}>{s.label} <span class="muted small">{s.groups.length}</span></a>
       ))}
     </nav>
+    <p class="muted small" id="story-result"></p>
 
     {sections.map((s) => (
-      <section id={`k-${s.kind}`}>
+      <section id={`k-${s.kind}`} class="kind">
         <h2>{s.label}</h2>
         <div class="groups">
           {s.groups.map((g) => (
-            <details class="card group" id={g.id}>
+            <details class="card group" id={g.id} data-name={g.name.toLowerCase()}>
               <summary>
                 {g.image ? <img class="group__thumb" src={g.image} alt="" loading="lazy" decoding="async" /> : <span class="group__thumb thumb--placeholder" />}
                 <span class="group__text">
@@ -72,7 +78,58 @@ const sections = ORDER.map((kind) => ({
   </div>
 </Layout>
 
+<script>
+  // 이벤트 이름 검색 (부분 일치). 결과가 없는 종류 섹션은 숨긴다. 검색어는 URL 해시(#q=…)에 저장.
+  const input = document.getElementById('story-search') as HTMLInputElement;
+  const result = document.getElementById('story-result')!;
+  const sections = Array.from(document.querySelectorAll<HTMLElement>('.kind'));
+  const groups = Array.from(document.querySelectorAll<HTMLElement>('.group'));
+  const apply = () => {
+    const q = input.value.trim().toLowerCase();
+    let visible = 0;
+    for (const sec of sections) {
+      let n = 0;
+      for (const g of Array.from(sec.querySelectorAll<HTMLElement>('.group'))) {
+        const show = !q || (g.dataset.name ?? '').includes(q);
+        g.hidden = !show;
+        if (show) n++;
+      }
+      sec.hidden = n === 0;
+      visible += n;
+    }
+    result.textContent = q ? `${visible}개 이벤트` : '';
+    history.replaceState(null, '', q ? `#q=${encodeURIComponent(q)}` : location.pathname);
+  };
+  input.addEventListener('input', apply);
+  const m = new URLSearchParams(location.hash.slice(1)).get('q');
+  if (m) {
+    input.value = m;
+    apply();
+  }
+</script>
+
 <style>
+  .search {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-sans);
+    margin-bottom: 0.25rem;
+  }
+  .search input {
+    font: inherit;
+    font-size: 0.95rem;
+    padding: 0.4rem 0.7rem;
+    border: 1px solid var(--color-line);
+    border-radius: 999px;
+    background: var(--color-card);
+    color: var(--color-fg);
+    width: min(100%, 22rem);
+  }
+  .search input:focus {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+  }
   .groups {
     display: grid;
     gap: 0.5rem;

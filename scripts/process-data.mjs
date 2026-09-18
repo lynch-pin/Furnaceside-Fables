@@ -441,6 +441,7 @@ let overrides = {};
 const overridesFile = path.join(OVERRIDES_DIR, 'timeline.json');
 if (fs.existsSync(overridesFile)) {
   overrides = JSON.parse(fs.readFileSync(overridesFile, 'utf8'));
+  delete overrides._comment;
   log(`  overrides/timeline.json 적용 (${Object.keys(overrides).length}건)`);
 }
 
@@ -474,7 +475,9 @@ for (const g of groups) {
     const sov = gov.stories?.[sid] ?? {};
     let loreYear = null;
     let loreSource = null;
+    // keepStoryYears: 회상/과거편이 섞인 그룹. 개별 스토리의 날짜 스탬프가 그룹 확정값보다 우선.
     if (Number.isInteger(sov.loreYear)) [loreYear, loreSource] = [sov.loreYear, 'override'];
+    else if (gov.keepStoryYears && s.loreYear) [loreYear, loreSource] = [s.loreYear, 'text'];
     else if (Number.isInteger(gov.loreYear)) [loreYear, loreSource] = [gov.loreYear, 'override'];
     else if (s.loreYear) [loreYear, loreSource] = [s.loreYear, 'text'];
     else if (gAuto.year) [loreYear, loreSource] = [gAuto.year, gAuto.source];
@@ -495,7 +498,7 @@ for (const g of groups) {
       needsTranslation: s.needsTranslation,
       // 세계관 연도
       loreYear,
-      loreLabel: sov.loreLabel ?? (loreSource === 'override' ? gov.loreLabel : null) ?? (loreYear ? `${loreYear}년` : null),
+      loreLabel: sov.loreLabel ?? (loreSource === 'override' && loreYear === gov.loreYear ? gov.loreLabel : null) ?? (loreYear ? `${loreYear}년` : null),
       loreSource,
       loreEvidence: (s.loreEvidence ?? []).filter((e) => e.stamp).slice(0, 4),
       // 정렬 보조
