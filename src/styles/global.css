@@ -7,40 +7,68 @@
   --font-serif: 'Noto Serif KR', 'Apple SD Gothic Neo', 'Malgun Gothic', serif;
   --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
 
-  --color-bg: #faf8f4;
-  --color-fg: #1c1917;
-  --color-muted: #6b6560;
-  --color-line: #e5e0d8;
-  --color-accent: #b45309;
-  --color-accent-soft: #fde9cf;
-  --color-card: #ffffff;
+  /* 팔레트: vim jellybeans 기반.
+     다크 = jellybeans 원색 (bg #151515, fg #e8e8d3, yellow #fad07a, blue #8197bf, orange #cf6a4c, green #99ad6a)
+     라이트 = 같은 색상군을 종이 톤으로 뒤집은 변형 */
+  --jb-bg: #151515;
+  --jb-bg-alt: #1c1c1c;
+  --jb-fg: #e8e8d3;
+  --jb-comment: #888888;
+  --jb-yellow: #fad07a;
+  --jb-orange: #ffb964;
+  --jb-red: #cf6a4c;
+  --jb-blue: #8197bf;
+  --jb-sky: #8fbfdc;
+  --jb-green: #99ad6a;
+  --jb-purple: #c6b6ee;
+  --jb-pink: #f0a0c0;
+  --jb-visual: #404040;
+  --jb-search-bg: #302028;
+
+  /* 라이트 테마 (기본) */
+  --color-bg: #efeee6;
+  --color-fg: #1c1c1c;
+  --color-muted: #605958;
+  --color-line: #d4d1c4;
+  --color-accent: #b5522f;        /* jellybeans red 를 어둡게 */
+  --color-accent-soft: #f3e2c9;
+  --color-link: #4a6396;          /* jellybeans blue 를 어둡게 */
+  --color-card: #f7f6ef;
+  --color-badge-bg: #dfe6f2;
+  --color-badge-fg: #34486f;
 
   --measure: 42rem;      /* 본문 최대 폭 */
   --measure-wide: 64rem; /* 목록/연표 최대 폭 */
   --radius: 6px;
 }
 
-/* 다크 모드: 시스템 설정을 따르되(auto), <html data-theme="dark|light"> 로 강제 가능 (Layout 의 토글) */
+/* 다크 모드(jellybeans): 시스템 설정을 따르되(auto), <html data-theme="dark|light"> 로 강제 가능 (Layout 의 토글) */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --color-bg: #15130f;
-    --color-fg: #ece7df;
-    --color-muted: #a39d94;
-    --color-line: #2e2a25;
-    --color-accent: #f59e0b;
-    --color-accent-soft: #3a2a12;
-    --color-card: #1d1a16;
+    --color-bg: var(--jb-bg);
+    --color-fg: var(--jb-fg);
+    --color-muted: var(--jb-comment);
+    --color-line: #333333;
+    --color-accent: var(--jb-yellow);
+    --color-accent-soft: var(--jb-search-bg);
+    --color-link: var(--jb-blue);
+    --color-card: var(--jb-bg-alt);
+    --color-badge-bg: #2a3040;
+    --color-badge-fg: var(--jb-sky);
     color-scheme: dark;
   }
 }
 :root[data-theme='dark'] {
-  --color-bg: #15130f;
-  --color-fg: #ece7df;
-  --color-muted: #a39d94;
-  --color-line: #2e2a25;
-  --color-accent: #f59e0b;
-  --color-accent-soft: #3a2a12;
-  --color-card: #1d1a16;
+  --color-bg: var(--jb-bg);
+  --color-fg: var(--jb-fg);
+  --color-muted: var(--jb-comment);
+  --color-line: #333333;
+  --color-accent: var(--jb-yellow);
+  --color-accent-soft: var(--jb-search-bg);
+  --color-link: var(--jb-blue);
+  --color-card: var(--jb-bg-alt);
+  --color-badge-bg: #2a3040;
+  --color-badge-fg: var(--jb-sky);
   color-scheme: dark;
 }
 
@@ -67,7 +95,7 @@ body {
 }
 
 a {
-  color: var(--color-accent);
+  color: var(--color-link);
   text-decoration: none;
 }
 a:hover {
@@ -110,18 +138,8 @@ h3 {
   vertical-align: middle;
 }
 .badge--fallback {
-  background: #e0e7ff;
-  color: #3730a3;
-}
-:root[data-theme='dark'] .badge--fallback {
-  background: #2b2f5a;
-  color: #c7d2fe;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .badge--fallback {
-    background: #2b2f5a;
-    color: #c7d2fe;
-  }
+  background: var(--color-badge-bg);
+  color: var(--color-badge-fg);
 }
 
 /* 썸네일 */
@@ -171,6 +189,9 @@ h3 {
   background: var(--color-card);
   color: var(--color-fg);
   cursor: pointer;
+  text-decoration: none;
+}
+.shortcuts a:hover {
   text-decoration: none;
 }
 .shortcuts a:hover,

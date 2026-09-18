@@ -7,6 +7,13 @@
  *   npm run translate -- --only act53side_level_act53side_01_beg
  *   npm run translate -- --prune     # ko_KR 데이터가 생겨 더 이상 쓰이지 않는 캐시 삭제 (API 호출 없음)
  *   npm run translate -- --dry-run   # 대상 목록만 출력
+ *   npm run translate -- --export    # API 없이: 번역 원문을 translations/zh_CN/stories-src/<storyId>.json 로 내보내기
+ *                                    #   → 다른 도구/세션에서 번역한 뒤 같은 파일명으로 translations/zh_CN/stories/ 에 저장
+ *   npm run translate -- --check     # 캐시 검증 (줄 수 일치, 중국어 잔존 여부)
+ *
+ * 캐시는 반드시 API 로 만들 필요가 없다. 아래 형식만 맞으면 어떤 방법으로 번역해도 된다.
+ *   translations/zh_CN/stories/<storyId>.json = { "source": "zh_CN", "lines": ["번역 줄", ...] }
+ *   lines 는 --export 가 만든 src 파일의 lines 와 같은 길이·순서 (parseStory 결과에서 text 가 있는 줄만).
  *
  * 메타(이름/줄거리)와 CN 전용 오퍼레이터 텍스트는 translations/zh_CN/meta.json, operators/*.json 에 수동/일괄 번역본을 둔다.
  * 캐시 포맷: { "source": "zh_CN", "model": "...", "lines": ["번역 줄", ...] } — parseStory 결과 중 text 가 있는 줄 순서와 1:1.
@@ -51,6 +58,65 @@ if (flag('--prune')) {
   }
   console.log(`[translate] ${n}개 캐시 삭제`);
   process.exit(0);
+}
+
+const textLines = (s) => {
+  const raw = readStoryText(s.txt);
+  if (!raw) return null;
+  return parseStory(raw.text).filter((l) => typeof l.text === 'string' && l.text.length > 0);
+};
+const linesOf = (s) => textLines(s)?.map((l) => l.text) ?? null;
+
+if (flag('--export')) {
+  const SRC = path.join(translationsRoot('zh_CN'), 'stories-src');
+  fs.mkdirSync(SRC, { recursive: true });
+  let n = 0;
+  for (const s of targets) {
+    if (cached.has(s.id)) continue;
+    const tl = textLines(s);
+    if (!tl) continue;
+    // context: 번역 참고용 (화자/줄 종류). 결과 파일에는 lines 만 필요.
+    fs.writeFileSync(
+      path.join(SRC, `${s.id}.json`),
+      JSON.stringify(
+        {
+          id: s.id,
+          group: s.groupName,
+          name: s.name,
+          source: 'zh_CN',
+          lineCount: tl.length,
+          context: tl.map((l) => (l.type === 'dialogue' ? l.speaker : l.type)),
+          lines: tl.map((l) => l.text),
+        },
+        null,
+        1,
+      ),
+    );
+    n++;
+  }
+  console.log(`[translate] ${n}편 원문을 ${path.relative(ROOT, SRC)}/ 에 내보냈습니다.`);
+  console.log('  번역 결과는 같은 파일명으로 translations/zh_CN/stories/<storyId>.json 에 { "source": "zh_CN", "lines": [...] } 형식으로 저장하세요.');
+  process.exit(0);
+}
+
+if (flag('--check')) {
+  let ok = 0, bad = 0;
+  const CJK = /[\u4e00-\u9fff]/;
+  for (const s of targets) {
+    if (!cached.has(s.id)) continue;
+    const tr = JSON.parse(fs.readFileSync(path.join(OUT, `${s.id}.json`), 'utf8'));
+    const src = linesOf(s) ?? [];
+    const problems = [];
+    if (!Array.isArray(tr.lines)) problems.push('lines 없음');
+    else if (tr.lines.length !== src.length) problems.push(`줄 수 ${tr.lines.length} ≠ 원문 ${src.length}`);
+    else {
+      const cjk = tr.lines.filter((l) => CJK.test(l)).length;
+      if (cjk) problems.push(`중국어 잔존 ${cjk}줄`);
+    }
+    if (problems.length) { bad++; console.log(`  ✗ ${s.id}: ${problems.join(', ')}`); } else ok++;
+  }
+  console.log(`[translate] 검증: 정상 ${ok}, 문제 ${bad}`);
+  process.exit(bad ? 1 : 0);
 }
 
 let todo = targets.filter((s) => !cached.has(s.id));
