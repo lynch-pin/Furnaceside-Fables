@@ -1,18 +1,21 @@
 ---
 /**
- * /timeline — 스토리 연표. 이벤트(메인 챕터 / 사이드 / 미니) 단위, 세계관 연도(테라 력) 기준 정렬.
- *   - 이벤트 연도: overrides → 인게임 아카이브 → 본문 날짜 스탬프(2편 이상 일치) → 1편만(검수 필요) (scripts/process-data.mjs)
- *   - 회상이 섞인 이벤트도 "대부분의 사건이 벌어지는 시기" 한 곳에만 둔다. 개별 스토리의 연도가 다르면 작은 표시만.
+ * /timeline — 스토리 연표. 이벤트 단위, 세계관 연도(테라 력) 기준 정렬.
+ *   - 접힌 상태: 한 줄(썸네일·종류·이름·시기·출시일·편수)로 컴팩트하게
+ *   - 펼치면: 큰 썸네일 + 스토리 목록(제목·태그·줄거리) — 스토리를 누르면 리더로 이동
+ *   - 이벤트 연도: overrides → 인게임 아카이브 → 본문 날짜 스탬프(2편 이상) → 1편만(검수 필요) (scripts/process-data.mjs)
+ *   - 회상이 섞인 이벤트도 주된 시기 한 곳에만 두고, 다른 연도의 스토리에는 연도만 작게 표시
  *   - 연도를 못 찾은 이벤트는 마지막 "연대 미상" 구역에 출시 순으로
- *   - 스토리 칩을 누르면 리더로 이동
  *
  * TODO(timeline): loreSource 가 'text-weak' / 'group-text' 인 항목은 자동 추정이므로 검수 후 overrides/timeline.json 에 확정값을 넣을 것.
  */
 import Layout from '../layouts/Layout.astro';
 import SourceBadge from '../components/SourceBadge.astro';
-import { loadTimeline, KIND_LABEL } from '../lib/data.mjs';
+import { loadTimeline, loadStories, KIND_LABEL } from '../lib/data.mjs';
 
 const timeline = loadTimeline();
+const { stories } = loadStories();
+const summaryOf = new Map(stories.map((s) => [s.id, s.summary]));
 
 const SOURCE_LABEL: Record<string, string> = {
   override: '확정',
@@ -36,7 +39,7 @@ const heading = (key: string) => (key === UNKNOWN ? UNKNOWN : `${key}년`);
   <div class="container">
     <h1>연표</h1>
     <p class="muted small">
-      테라 력 기준, 이벤트 단위. 회상이 섞인 이벤트는 주된 시기에 배치했고 다른 연도의 스토리에는 연도를 따로 표시합니다.
+      테라 력 기준, 이벤트 단위. 항목을 누르면 스토리 목록과 줄거리가 펼쳐집니다. 회상이 섞인 이벤트는 주된 시기에 배치했고,
       연도가 확인되지 않은 이벤트는 맨 아래 "연대 미상"에 출시 순으로 있습니다.
     </p>
 
@@ -44,6 +47,7 @@ const heading = (key: string) => (key === UNKNOWN ? UNKNOWN : `${key}년`);
       {[...byYear.keys()].map((y) => (
         <a href={`#${anchor(y)}`}>{heading(y)} <span class="muted small">{byYear.get(y)!.length}</span></a>
       ))}
+      <button type="button" id="toggle-all" class="muted">모두 펼치기</button>
     </nav>
 
     {[...byYear.entries()].map(([year, events]) => (
@@ -51,53 +55,64 @@ const heading = (key: string) => (key === UNKNOWN ? UNKNOWN : `${key}년`);
         <h2>{heading(year)} <span class="muted small">{events.length}개 이벤트</span></h2>
         <ol class="list-plain events">
           {events.map((t) => (
-            <li class="event card" id={t.id}>
-              <div class="event__media">
-                {t.image ? (
-                  <img class="thumb" src={t.image} alt="" loading="lazy" decoding="async" />
-                ) : (
-                  <div class="thumb thumb--placeholder">{t.chapter?.code ?? KIND_LABEL[t.kind]}</div>
-                )}
-              </div>
-              <div class="event__body">
-                <div class="event__head">
-                  <span class="badge">{t.chapter?.label ?? KIND_LABEL[t.kind]}</span>
-                  <h3 class="event__title">
-                    <a href={`/story#${t.id}`}>{t.name}</a>
-                  </h3>
-                  <SourceBadge locale={t.sourceLocale} translated={t.translated} />
-                </div>
-                <div class="event__meta small muted">
-                  {t.loreLabel && <span>{t.loreLabel}</span>}
-                  {t.loreSource && (
-                    <span class:list={['source', `source--${t.loreSource}`]} title={t.loreEvidence?.map((e: any) => e.text).join('\n') || undefined}>
-                      {SOURCE_LABEL[t.loreSource] ?? t.loreSource}
-                    </span>
+            <li class="event">
+              <details class="card event__details" id={t.id}>
+                <summary class="event__summary">
+                  {t.image ? (
+                    <img class="event__thumb" src={t.image} alt="" loading="lazy" decoding="async" />
+                  ) : (
+                    <span class="event__thumb thumb--placeholder">{t.chapter?.code ?? ''}</span>
                   )}
-                  <span title="게임 내 공개일 (참고)">출시 {t.releaseDate ?? '-'}</span>
-                  <span>{t.stories.length}편</span>
-                </div>
-                <ul class="list-plain stories">
-                  {t.stories.map((s: any) => (
-                    <li>
-                      {s.available ? (
-                        <a class="story-link" href={`/story/${s.id}`}>
-                          {s.code && <span class="code">{s.code}</span>}
-                          <span>{s.name}</span>
-                          {s.avgTag && <span class="muted small">{s.avgTag}</span>}
-                          {s.loreYear && s.loreYear !== t.loreYear && <span class="story-year" title="이 스토리 본문의 연도 (회상 등)">{s.loreYear}년</span>}
-                        </a>
-                      ) : (
-                        <span class="story-link muted">
-                          {s.code && <span class="code">{s.code}</span>}
-                          <span>{s.name}</span>
-                          <span class="small">(원문 없음)</span>
+                  <span class="event__text">
+                    <span class="event__title">
+                      <span class="badge">{t.chapter?.label ?? KIND_LABEL[t.kind]}</span>
+                      <strong>{t.name}</strong>
+                      <SourceBadge locale={t.sourceLocale} translated={t.translated} />
+                    </span>
+                    <span class="event__meta small muted">
+                      {t.loreLabel && <span>{t.loreLabel}</span>}
+                      {t.loreSource && (
+                        <span class:list={['source', `source--${t.loreSource}`]} title={t.loreEvidence?.map((e: any) => e.text).join('\n') || undefined}>
+                          {SOURCE_LABEL[t.loreSource] ?? t.loreSource}
                         </span>
                       )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                      <span title="게임 내 공개일 (참고)">출시 {t.releaseDate ?? '-'}</span>
+                      <span>{t.stories.length}편</span>
+                    </span>
+                  </span>
+                  <span class="event__chevron" aria-hidden="true">▾</span>
+                </summary>
+
+                <div class="event__body">
+                  {t.image && <img class="thumb event__hero" src={t.image} alt="" loading="lazy" decoding="async" />}
+                  <ol class="list-plain stories">
+                    {t.stories.map((s: any) => {
+                      const summary = summaryOf.get(s.id);
+                      return (
+                        <li class="story">
+                          <div class="story__head">
+                            {s.available ? (
+                              <a class="story__link" href={`/story/${s.id}`}>
+                                {s.code && <span class="code">{s.code}</span>}
+                                <span>{s.name}</span>
+                              </a>
+                            ) : (
+                              <span class="muted">
+                                {s.code && <span class="code">{s.code}</span>} {s.name} <span class="small">(원문 없음)</span>
+                              </span>
+                            )}
+                            {s.avgTag && <span class="muted small">{s.avgTag}</span>}
+                            {s.loreYear && s.loreYear !== t.loreYear && <span class="story-year" title="이 스토리 본문의 연도 (회상 등)">{s.loreYear}년</span>}
+                            <SourceBadge locale={s.sourceLocale} translated={s.translated} />
+                          </div>
+                          {summary && <p class="story__summary small muted">{summary}</p>}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                  <p class="small"><a href={`/story#${t.id}`}>스토리 목록에서 보기 →</a></p>
+                </div>
+              </details>
             </li>
           ))}
         </ol>
@@ -105,6 +120,25 @@ const heading = (key: string) => (key === UNKNOWN ? UNKNOWN : `${key}년`);
     ))}
   </div>
 </Layout>
+
+<script>
+  // 해시(#act11d0)로 들어오면 해당 이벤트를 펼치고, "모두 펼치기/접기" 토글 제공
+  const all = Array.from(document.querySelectorAll<HTMLDetailsElement>('.event__details'));
+  const openFromHash = () => {
+    const id = decodeURIComponent(location.hash.slice(1));
+    const el = id && document.getElementById(id);
+    if (el instanceof HTMLDetailsElement) el.open = true;
+  };
+  openFromHash();
+  window.addEventListener('hashchange', openFromHash);
+
+  const toggle = document.getElementById('toggle-all') as HTMLButtonElement | null;
+  toggle?.addEventListener('click', () => {
+    const anyClosed = all.some((d) => !d.open);
+    for (const d of all) d.open = anyClosed;
+    toggle.textContent = anyClosed ? '모두 접기' : '모두 펼치기';
+  });
+</script>
 
 <style>
   .year h2 {
@@ -121,47 +155,76 @@ const heading = (key: string) => (key === UNKNOWN ? UNKNOWN : `${key}년`);
     margin-left: 0.5rem;
     padding-left: 1.25rem;
     display: grid;
-    gap: 0.75rem;
+    gap: 0.4rem;
   }
   .event {
     position: relative;
-    display: grid;
-    grid-template-columns: 12rem 1fr;
-    gap: 1rem;
-    padding: 0.75rem;
   }
   .event::before {
     content: '';
     position: absolute;
-    left: calc(-1.25rem - 6px - 0.75rem);
-    top: 1.1rem;
+    left: calc(-1.25rem - 6px);
+    top: 1.15rem;
     width: 10px;
     height: 10px;
     border-radius: 50%;
     background: var(--color-accent);
   }
-  .event__media .thumb {
-    border-radius: 4px;
+  .event__details {
+    padding: 0;
   }
-  .event__head {
+  .event__summary {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    list-style: none;
+  }
+  .event__summary::-webkit-details-marker {
+    display: none;
+  }
+  .event__thumb {
+    width: 5.5rem;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    border-radius: 4px;
+    background: var(--color-line);
+    flex-shrink: 0;
+  }
+  .event__text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+    flex: 1;
+  }
+  .event__title {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.4rem 0.75rem;
-  }
-  .event__title {
-    margin: 0;
-    font-size: 1.15rem;
-  }
-  .event__title a {
-    color: var(--color-fg);
+    gap: 0.4rem 0.6rem;
   }
   .event__meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.25rem 0.75rem;
-    margin: 0.2rem 0 0.5rem;
+    gap: 0.15rem 0.75rem;
     font-family: var(--font-sans);
+  }
+  .event__chevron {
+    color: var(--color-muted);
+    transition: transform 0.15s;
+  }
+  .event__details[open] .event__chevron {
+    transform: rotate(180deg);
+  }
+  .event__body {
+    border-top: 1px solid var(--color-line);
+    padding: 0.75rem;
+  }
+  .event__hero {
+    max-height: 14rem;
+    margin-bottom: 0.75rem;
   }
   .source {
     padding: 0.05em 0.45em;
@@ -174,41 +237,42 @@ const heading = (key: string) => (key === UNKNOWN ? UNKNOWN : `${key}년`);
     color: var(--color-accent);
   }
   .stories {
+    display: grid;
+    gap: 0.5rem;
+  }
+  .story__head {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.35rem 0.5rem;
-  }
-  .story-link {
-    display: inline-flex;
     align-items: baseline;
-    gap: 0.4rem;
-    padding: 0.3rem 0.55rem; /* 터치 타깃 확보 */
-    border: 1px solid var(--color-line);
-    border-radius: var(--radius);
-    background: var(--color-bg);
-    color: inherit;
-    font-size: 0.9rem;
+    gap: 0.3rem 0.6rem;
   }
-  a.story-link:hover {
-    border-color: var(--color-accent);
-    text-decoration: none;
+  .story__link {
+    color: var(--color-fg);
+    font-weight: 600;
+  }
+  .story__link:hover {
+    color: var(--color-link);
+  }
+  .story__summary {
+    margin: 0.1rem 0 0;
+    white-space: pre-line;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
   .code {
     font-family: var(--font-sans);
     font-size: 0.75rem;
     color: var(--color-accent);
+    margin-right: 0.3rem;
   }
   .story-year {
     font-family: var(--font-sans);
     font-size: 0.72rem;
     color: var(--color-muted);
   }
-  @media (max-width: 600px) {
-    .event {
-      grid-template-columns: 1fr;
-    }
-    .event__media .thumb {
-      max-height: 10rem;
-    }
+  #toggle-all {
+    margin-left: auto;
   }
 </style>

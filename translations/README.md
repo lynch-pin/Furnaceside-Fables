@@ -11,7 +11,19 @@ translations/zh_CN/
   stories/<id>.json       스토리 본문 번역 결과  { "source": "zh_CN", "lines": [...] }
 ```
 
-## 스토리 본문을 API 키 없이 번역하기
+## 운영 범위와 갱신 절차
+
+현재 방침: **스토리 본문은 번역하지 않고**, 이벤트/스토리 이름·태그·줄거리와 CN 전용 오퍼레이터 텍스트까지만 번역한다.
+게임 데이터가 갱신되어 새 CN 전용 콘텐츠가 들어오면(매주 월요일 자동 빌드에서는 `CN server · 미번역` 으로 표시됨):
+
+1. `npm run sync && npm run process`
+2. `npm run translate -- --export-meta` → `translations/zh_CN/todo/` 에 번역 필요 항목만 생성
+3. 번역 (Claude 세션 등): `meta.src.json` → 값만 번역해 `translations/zh_CN/meta.json` 에 병합, `op.<id>.src.json` → 구조 그대로 `operators/<id>.json`
+4. `npm run process` 로 확인 후 커밋 → 다음 배포에 반영
+
+이 갱신은 자동화되어 있지 않다. GitHub Actions 는 게임 데이터 동기화·빌드·배포만 자동으로 수행하며, 번역과 연표 확정(overrides)은 사람이 커밋해야 한다.
+
+## 스토리 본문을 API 키 없이 번역하기 (현재는 사용하지 않음)
 
 캐시는 어떤 방법으로 만들어도 된다. 다른 세션(예: Claude Sonnet)에서 번역할 때는:
 

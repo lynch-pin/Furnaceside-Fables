@@ -10,6 +10,9 @@
  *   npm run translate -- --export    # API 없이: 번역 원문을 translations/zh_CN/stories-src/<storyId>.json 로 내보내기
  *                                    #   → 다른 도구/세션에서 번역한 뒤 같은 파일명으로 translations/zh_CN/stories/ 에 저장
  *   npm run translate -- --check     # 캐시 검증 (줄 수 일치, 중국어 잔존 여부)
+ *   npm run translate -- --export-meta  # 번역본이 없는 CN 전용 이벤트/스토리 이름·줄거리와 오퍼레이터 텍스트를
+ *                                       #   translations/zh_CN/todo/ 에 내보내기 (현재 운영 범위: 본문 제외, 이 수준까지만 번역)
+ *                                       #   → 번역 후 meta.json 에 병합 / operators/<id>.json 으로 저장
  *
  * 캐시는 반드시 API 로 만들 필요가 없다. 아래 형식만 맞으면 어떤 방법으로 번역해도 된다.
  *   translations/zh_CN/stories/<storyId>.json = { "source": "zh_CN", "lines": ["번역 줄", ...] }
@@ -66,6 +69,40 @@ const textLines = (s) => {
   return parseStory(raw.text).filter((l) => typeof l.text === 'string' && l.text.length > 0);
 };
 const linesOf = (s) => textLines(s)?.map((l) => l.text) ?? null;
+
+if (flag('--export-meta')) {
+  // 운영 방침: 스토리 본문은 번역하지 않고, 이벤트/스토리 이름·태그·줄거리와 CN 전용 오퍼레이터 텍스트까지만 번역한다.
+  // 이 명령은 그 범위에서 아직 번역본이 없는 항목만 골라 내보낸다. (npm run process 이후 실행)
+  const TODO = path.join(translationsRoot('zh_CN'), 'todo');
+  fs.mkdirSync(TODO, { recursive: true });
+  const meta = { groups: {}, stories: {} };
+  for (const g of DATA.groups) if (g.needsTranslation) meta.groups[g.id] = { name: g.name };
+  for (const s of DATA.stories) {
+    if (s.needsTranslation && !s.translated && (s.name || s.summary)) {
+      // 이름이 이미 번역된 경우(meta.json 에 있음)는 process-data 가 translated 로 표시하므로 여기서 제외됨
+      meta.stories[s.id] = { name: s.name, avgTag: s.avgTag ?? undefined, summary: s.summaryLocale === 'zh_CN' ? s.summary : undefined };
+    }
+  }
+  const nMeta = Object.keys(meta.groups).length + Object.keys(meta.stories).length;
+  if (nMeta) fs.writeFileSync(path.join(TODO, 'meta.src.json'), JSON.stringify(meta, null, 1));
+  const ops = JSON.parse(fs.readFileSync(path.join(ROOT, 'src/data/operators.json'), 'utf8'));
+  let nOps = 0;
+  for (const o of ops) {
+    if (!o.needsTranslation) continue;
+    const src = {
+      id: o.id, name: o.name, appellation: o.appellation, description: o.description, itemUsage: o.itemUsage, itemDesc: o.itemDesc,
+      obtainApproach: o.obtainApproach, tags: o.tags,
+      records: o.records.map((r) => ({ title: r.title, entries: r.entries.map((e) => ({ text: e.text, unlockString: e.unlockString })) })),
+      operatorRecords: o.operatorRecords.map((r) => ({ setId: r.setId, name: r.name, stories: r.stories.map((x) => ({ id: x.id, name: x.name })) })),
+      words: o.words.map((w) => ({ wordKey: w.wordKey, lines: w.lines.map((l) => ({ id: l.id, title: l.title, text: l.text })) })),
+    };
+    fs.writeFileSync(path.join(TODO, `op.${o.id}.src.json`), JSON.stringify(src, null, 1));
+    nOps++;
+  }
+  console.log(`[translate] 번역 필요: 메타 ${nMeta}건, 오퍼레이터 ${nOps}명 → ${path.relative(ROOT, TODO)}/`);
+  console.log('  번역 후: meta.src.json 은 translations/zh_CN/meta.json 에 병합, op.<id>.src.json 은 translations/zh_CN/operators/<id>.json 으로 저장 (구조 동일, 값만 번역).');
+  process.exit(0);
+}
 
 if (flag('--export')) {
   const SRC = path.join(translationsRoot('zh_CN'), 'stories-src');
