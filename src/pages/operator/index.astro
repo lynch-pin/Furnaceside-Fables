@@ -1,7 +1,7 @@
 ---
 /**
  * /operator — 오퍼레이터 목록.
- *   - 희귀도(★) 섹션. 희귀도·직군은 다중 선택 토글 필터(스크롤 이동 없음), 이름/영문명 검색
+ *   - 희귀도(★) 섹션. 희귀도·직군·서버(실장/미실장)는 다중 선택 토글 필터(스크롤 이동 없음), 이름/영문명 검색
  *   - 아바타 썸네일
  * TODO(operator-list): 진영 필터.
  */
@@ -22,6 +22,14 @@ const PROFESSIONS = ['PIONEER', 'WARRIOR', 'TANK', 'SNIPER', 'CASTER', 'MEDIC', 
 const professionCount = (p: string) => operators.filter((o) => o.profession === p).length;
 const stars = (r: number) => (r ? '★'.repeat(r) : '기타');
 const op_locale = (o: any) => o.sourceLocale ?? o.locale ?? null;
+
+// 서버 구분: kr = 한국 서버 실장, cn = 중국 서버에만 있음(미실장)
+const serverOf = (o: any) => (op_locale(o) === 'zh_CN' ? 'cn' : 'kr');
+const SERVERS = [
+  { value: 'kr', label: '실장' },
+  { value: 'cn', label: '미실장 (CN)' },
+];
+const serverCount = (v: string) => operators.filter((o) => serverOf(o) === v).length;
 ---
 
 <Layout title="오퍼레이터">
@@ -43,6 +51,16 @@ const op_locale = (o: any) => o.sourceLocale ?? o.locale ?? null;
         ))}
       </div>
 
+      <div class="shortcuts" role="group" aria-label="서버 필터" id="server-filter">
+        <span class="shortcuts__label">서버</span>
+        <button type="button" data-all aria-pressed="true">전체</button>
+        {SERVERS.map((sv) => (
+          <button type="button" data-value={sv.value} aria-pressed="true">
+            {sv.label} <span class="muted small">{serverCount(sv.value)}</span>
+          </button>
+        ))}
+      </div>
+
       <div class="shortcuts" role="group" aria-label="직군 필터" id="profession-filter">
         <span class="shortcuts__label">직군</span>
         <button type="button" data-all aria-pressed="true">전체</button>
@@ -60,7 +78,7 @@ const op_locale = (o: any) => o.sourceLocale ?? o.locale ?? null;
         <h2>{stars(r)} <span class="muted small count" data-total={byRarity.get(r)!.length}>{byRarity.get(r)!.length}</span></h2>
         <ul class="list-plain grid">
           {byRarity.get(r)!.map((o) => (
-            <li data-profession={o.profession} data-name={`${o.name} ${o.appellation}`.toLowerCase()}>
+            <li data-profession={o.profession} data-server={serverOf(o)} data-name={`${o.name} ${o.appellation}`.toLowerCase()}>
               <a class="card op" href={`/operator/${o.id}`}>
                 {o.avatar ? <img class="avatar" src={o.avatar} alt="" loading="lazy" decoding="async" /> : <span class="avatar" />}
                 <span class="op__text">
@@ -82,8 +100,8 @@ const op_locale = (o: any) => o.sourceLocale ?? o.locale ?? null;
 </Layout>
 
 <script>
-  // 필터: 희귀도·직군은 다중 선택 토글(on/off). "전체" 는 모두 켜기. 검색은 이름/영문명 부분 일치.
-  // 상태는 URL 해시(#r=6,5&p=WARRIOR,SNIPER&q=아미야)에 저장해 새로고침/공유 시 복원.
+  // 필터: 희귀도·서버·직군은 다중 선택 토글(on/off). "전체" 는 모두 켜기. 검색은 이름/영문명 부분 일치.
+  // 상태는 URL 해시(#r=6,5&s=kr&p=WARRIOR,SNIPER&q=아미야)에 저장해 새로고침/공유 시 복원.
   type Group = { root: HTMLElement; all: HTMLButtonElement; items: HTMLButtonElement[] };
   const group = (id: string): Group => {
     const root = document.getElementById(id)!;
@@ -94,7 +112,9 @@ const op_locale = (o: any) => o.sourceLocale ?? o.locale ?? null;
     };
   };
   const rarity = group('rarity-filter');
+  const server = group('server-filter');
   const profession = group('profession-filter');
+  const groups = [rarity, server, profession];
   const search = document.getElementById('op-search') as HTMLInputElement;
   const result = document.getElementById('op-result')!;
   const sections = Array.from(document.querySelectorAll<HTMLElement>('.rarity'));
@@ -106,6 +126,7 @@ const op_locale = (o: any) => o.sourceLocale ?? o.locale ?? null;
 
   const apply = () => {
     const rs = selected(rarity);
+    const ss = selected(server);
     const ps = selected(profession);
     const q = search.value.trim().toLowerCase();
     let visible = 0;
@@ -113,7 +134,11 @@ const op_locale = (o: any) => o.sourceLocale ?? o.locale ?? null;
       const secOn = rs.has(sec.dataset.rarity!);
       let secVisible = 0;
       for (const li of Array.from(sec.querySelectorAll<HTMLLIElement>('.grid > li'))) {
-        const show = secOn && ps.has(li.dataset.profession!) && (!q || (li.dataset.name ?? '').includes(q));
+        const show =
+          secOn &&
+          ss.has(li.dataset.server!) &&
+          ps.has(li.dataset.profession!) &&
+          (!q || (li.dataset.name ?? '').includes(q));
         li.hidden = !show;
         if (show) secVisible++;
       }
@@ -124,17 +149,18 @@ const op_locale = (o: any) => o.sourceLocale ?? o.locale ?? null;
       if (empty) empty.hidden = secVisible > 0;
       visible += secVisible;
     }
-    for (const g of [rarity, profession]) set(g.all, g.items.every(on));
+    for (const g of groups) set(g.all, g.items.every(on));
     result.textContent = visible === cards.length ? '' : `${visible}명 표시 중`;
     // 해시 갱신 (모두 선택이면 생략)
     const parts: string[] = [];
     if (!rarity.items.every(on)) parts.push(`r=${[...rs].join(',')}`);
+    if (!server.items.every(on)) parts.push(`s=${[...ss].join(',')}`);
     if (!profession.items.every(on)) parts.push(`p=${[...ps].join(',')}`);
     if (q) parts.push(`q=${encodeURIComponent(q)}`);
     history.replaceState(null, '', parts.length ? `#${parts.join('&')}` : location.pathname);
   };
 
-  for (const g of [rarity, profession]) {
+  for (const g of groups) {
     g.all.addEventListener('click', () => {
       // 전체: 모두 켜기. 이미 모두 켜져 있으면 모두 끄기(빠른 단일 선택용)
       const every = g.items.every(on);
@@ -159,6 +185,7 @@ const op_locale = (o: any) => o.sourceLocale ?? o.locale ?? null;
     for (const b of g.items) set(b, want.has(b.dataset.value!));
   };
   restore(rarity, 'r');
+  restore(server, 's');
   restore(profession, 'p');
   if (params.get('q')) search.value = params.get('q')!;
   apply();
