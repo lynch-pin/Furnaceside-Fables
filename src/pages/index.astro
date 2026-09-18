@@ -12,9 +12,9 @@ const { stories } = loadStories();
 const operators = loadOperators();
 const summaryOf = new Map(stories.map((s) => [s.id, s.summary]));
 
-// 오늘의 추천: 읽을 수 있는 스토리가 있는 이벤트 중 날짜 시드로 4개.
+// 오늘의 추천: 읽을 수 있는 스토리가 있는 이벤트 중 날짜 시드로 1개.
 // 정적 사이트이므로 빌드 시점 날짜로 미리 렌더하고, 브라우저에서 오늘(KST) 날짜로 다시 고른다.
-const RECOMMEND_COUNT = 4;
+const RECOMMEND_COUNT = 1;
 const pool = timeline
   .filter((t) => t.stories.some((s: any) => s.available))
   .map((t) => {
@@ -29,7 +29,7 @@ const pool = timeline
       count: t.stories.filter((s: any) => s.available).length,
       firstStoryId: first.id,
       cn: t.sourceLocale === 'zh_CN',
-      summary: summary ? summary.replace(/\s+/g, ' ').slice(0, 140) : null,
+      summary: summary ? summary.replace(/\s+/g, ' ').slice(0, 220) : null,
     };
   });
 const buildDate = todayKst();
@@ -68,7 +68,7 @@ const recent = [...timeline].sort((a, b) => b.releaseTimestamp - a.releaseTimest
 
     <section class="recommend">
       <h2>오늘의 스토리 추천 <span class="muted small" id="rec-date">{buildDate}</span></h2>
-      <ul class="list-plain rec-list" id="rec-list">
+      <ul class="list-plain rec-list" id="rec-list" data-count={RECOMMEND_COUNT}>
         {picked.map((r) => (
           <li>
             <a class="card rec" href={`/timeline#${r.id}`}>
@@ -90,7 +90,7 @@ const recent = [...timeline].sort((a, b) => b.releaseTimestamp - a.releaseTimest
           </li>
         ))}
       </ul>
-      <p class="small muted">매일 바뀝니다. 항목을 누르면 연표에서 스토리 목록이 펼쳐집니다.</p>
+      <p class="small muted">매일 바뀝니다. 카드를 누르면 연표에서 스토리 목록이 펼쳐집니다.</p>
     </section>
 
     <section>
@@ -151,7 +151,7 @@ const recent = [...timeline].sort((a, b) => b.releaseTimestamp - a.releaseTimest
     const today = todayKst();
     if (today !== dateEl.textContent?.trim()) {
       const pool = JSON.parse(poolEl.textContent || '[]');
-      const picked = pickDaily(pool, 4, today);
+      const picked = pickDaily(pool, Number(list.dataset.count) || 1, today);
       const esc = (v: string) =>
         v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
       list.innerHTML = picked
@@ -199,13 +199,12 @@ const recent = [...timeline].sort((a, b) => b.releaseTimestamp - a.releaseTimest
   }
   .rec-list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
     gap: 0.6rem;
   }
   .rec {
     display: flex;
-    gap: 0.75rem;
-    padding: 0.6rem;
+    gap: 1rem;
+    padding: 0.75rem;
     color: inherit;
     height: 100%;
   }
@@ -214,7 +213,7 @@ const recent = [...timeline].sort((a, b) => b.releaseTimestamp - a.releaseTimest
     text-decoration: none;
   }
   .rec__thumb {
-    width: 6rem;
+    width: 11rem;
     aspect-ratio: 16 / 9;
     object-fit: cover;
     border-radius: 4px;
@@ -232,13 +231,22 @@ const recent = [...timeline].sort((a, b) => b.releaseTimestamp - a.releaseTimest
     flex-wrap: wrap;
     align-items: center;
     gap: 0.3rem 0.5rem;
+    font-size: 1.1rem;
+  }
+  @media (max-width: 480px) {
+    .rec {
+      flex-direction: column;
+    }
+    .rec__thumb {
+      width: 100%;
+    }
   }
   .rec__meta {
     font-family: var(--font-sans);
   }
   .rec__summary {
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
