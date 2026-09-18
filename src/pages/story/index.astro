@@ -1,10 +1,10 @@
 ---
 /**
- * /story — 스토리 목록 (그룹별)
- * TODO(story-list): 검색 / 종류 필터 (main·side·mini·record) 는 클라이언트 스크립트 없이도
- *   해시 기반 필터나 별도 페이지(/story/main 등)로 확장 가능.
+ * /story — 스토리 목록 (그룹별, 썸네일 포함)
+ * TODO(story-list): 검색 / 종류 필터 확장.
  */
 import Layout from '../../layouts/Layout.astro';
+import SourceBadge from '../../components/SourceBadge.astro';
 import { loadStories, KIND_LABEL } from '../../lib/data.mjs';
 
 const { groups, stories } = loadStories();
@@ -23,7 +23,7 @@ const sections = ORDER.map((kind) => ({
 <Layout title="스토리">
   <div class="container">
     <h1>스토리</h1>
-    <nav class="kinds" aria-label="종류">
+    <nav class="shortcuts" aria-label="종류">
       {sections.map((s) => (
         <a href={`#k-${s.kind}`}>{s.label} <span class="muted small">{s.groups.length}</span></a>
       ))}
@@ -36,12 +36,15 @@ const sections = ORDER.map((kind) => ({
           {s.groups.map((g) => (
             <details class="card group" id={g.id}>
               <summary>
-                <span class="group__name">
-                  {g.chapter && <span class="badge">{g.chapter.label}</span>}
-                  {g.name}
-                  {g.needsTranslation && <span class="badge badge--fallback">zh_CN</span>}
+                {g.image ? <img class="group__thumb" src={g.image} alt="" loading="lazy" decoding="async" /> : <span class="group__thumb thumb--placeholder" />}
+                <span class="group__text">
+                  <span class="group__name">
+                    {g.chapter && <span class="badge">{g.chapter.label}</span>}
+                    {g.name}
+                    <SourceBadge locale={g.sourceLocale} translated={g.translated} />
+                  </span>
+                  <span class="muted small">{g.date ?? ''} · {g.storyIds.length}편</span>
                 </span>
-                <span class="muted small">{g.date ?? ''} · {g.storyIds.length}편</span>
               </summary>
               <ol class="list-plain">
                 {g.storyIds.map((id) => {
@@ -56,6 +59,7 @@ const sections = ORDER.map((kind) => ({
                         <span class="muted">{st.code && <span class="code">{st.code}</span>} {st.name} (원문 없음)</span>
                       )}
                       {st.avgTag && <span class="muted small"> · {st.avgTag}</span>}
+                      {' '}<SourceBadge locale={st.locale} translated={st.translated} />
                     </li>
                   );
                 })}
@@ -69,13 +73,6 @@ const sections = ORDER.map((kind) => ({
 </Layout>
 
 <style>
-  .kinds {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem 1.25rem;
-    font-family: var(--font-sans);
-    margin-bottom: 1rem;
-  }
   .groups {
     display: grid;
     gap: 0.5rem;
@@ -83,9 +80,25 @@ const sections = ORDER.map((kind) => ({
   .group summary {
     cursor: pointer;
     display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.9rem;
+    list-style: none;
+  }
+  .group summary::-webkit-details-marker {
+    display: none;
+  }
+  .group__thumb {
+    width: 7rem;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    border-radius: 4px;
+    background: var(--color-line);
+    flex-shrink: 0;
+  }
+  .group__text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
   }
   .group__name {
     font-weight: 600;

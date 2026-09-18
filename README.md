@@ -17,6 +17,7 @@ npm test           # 파서 단위 테스트
 ```bash
 npm run sync       # scripts/sync-data.sh  : gamedata/ 최신화
 npm run process    # scripts/process-data.mjs : src/data/*.json 재생성
+npm run translate  # CN 전용 스토리 본문 번역 캐시 생성 (ANTHROPIC_API_KEY 필요)
 ```
 
 ## 구조
@@ -44,6 +45,27 @@ public/CNAME              커스텀 도메인
 .github/workflows/deploy.yml  main push / 매주 월 09:00 KST 자동 배포
 ```
 
+## CN 서버 전용 콘텐츠와 번역
+
+- 한국 서버에 없는 콘텐츠는 zh_CN 데이터로 채워지고 `CN server · 번역` / `CN server · 미번역` 배지가 붙는다.
+- 번역 캐시는 `translations/zh_CN/` 에 둔다. 이름·줄거리는 `meta.json`, CN 전용 오퍼레이터는 `operators/<id>.json`,
+  스토리 본문은 `stories/<storyId>.json` (`npm run translate`, `ANTHROPIC_API_KEY` 필요).
+- KR 서버에 실장되면 KR 데이터가 자동으로 우선 적용되며, `npm run translate -- --prune` 으로 불필요해진 캐시를 지운다.
+  `npm run process` 로그에도 불필요해진 캐시 목록이 출력된다.
+
+## 이미지
+
+이미지는 저장소에 넣지 않고 외부 raw 파일을 직접 링크한다 (`src/lib/assets.mjs`).
+
+| 용도 | 소스 |
+| --- | --- |
+| 오퍼레이터 아바타 | yuanyan3060/ArknightsGameResource `avatar/` (없으면 ArknightsAssets `arts/charavatars/`) |
+| 이벤트 대표 이미지 | ArknightsAssets `arts/ui/storyreview/hubs/{activity,mini}/storyEntryPic_*` |
+| 메인 챕터 배너 | ArknightsAssets `arts/ui/homebanners/zone/main_N.png` |
+| 개별 스토리 | `storyMainPic_*` → 없으면 스크립트의 첫 CG(`avg/images`) 또는 배경(`avg/backgrounds`) |
+
+존재 여부는 `scripts/sync-data.sh` 가 만드는 `gamedata/assets-index.txt`, `gamedata/avatar-index.txt` 로 확인한다.
+
 ## 데이터 소스에 대한 메모
 
 - 저장소: https://github.com/ArknightsAssets/ArknightsGamedata
@@ -70,7 +92,8 @@ public/CNAME              커스텀 도메인
 | --- | --- | --- |
 | `TODO(site)` | astro.config.mjs | `site` 설정 (도메인 확정 후) |
 | `TODO(translate)` | src/lib/i18n.mjs, story/[id].astro, deploy.yml | 번역 API 연동 + 캐시 |
-| `TODO(timeline)` | scripts/process-data.mjs, timeline.astro | 세계관 연대 정렬 |
+| `TODO(timeline)` | scripts/process-data.mjs, timeline.astro | 세계관 연대 검수 (overrides/timeline.json) |
+| `TODO(assets)` | src/lib/assets.mjs | 이미지 CDN / 셀프 호스팅 |
 | `TODO(style)` | src/styles/global.css | 디자인 |
 | `TODO(reader)` | StoryReader.astro | 배경/CG, 분기 접기, 폰트 크기 |
 | `TODO(appearances)` | operator/[id].astro | 이름 불일치 보정 |

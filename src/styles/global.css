@@ -20,8 +20,9 @@
   --radius: 6px;
 }
 
+/* 다크 모드: 시스템 설정을 따르되(auto), <html data-theme="dark|light"> 로 강제 가능 (Layout 의 토글) */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --color-bg: #15130f;
     --color-fg: #ece7df;
     --color-muted: #a39d94;
@@ -29,7 +30,18 @@
     --color-accent: #f59e0b;
     --color-accent-soft: #3a2a12;
     --color-card: #1d1a16;
+    color-scheme: dark;
   }
+}
+:root[data-theme='dark'] {
+  --color-bg: #15130f;
+  --color-fg: #ece7df;
+  --color-muted: #a39d94;
+  --color-line: #2e2a25;
+  --color-accent: #f59e0b;
+  --color-accent-soft: #3a2a12;
+  --color-card: #1d1a16;
+  color-scheme: dark;
 }
 
 *,
@@ -100,6 +112,81 @@ h3 {
 .badge--fallback {
   background: #e0e7ff;
   color: #3730a3;
+}
+:root[data-theme='dark'] .badge--fallback {
+  background: #2b2f5a;
+  color: #c7d2fe;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .badge--fallback {
+    background: #2b2f5a;
+    color: #c7d2fe;
+  }
+}
+
+/* 썸네일 */
+.thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: var(--color-line);
+  border-radius: var(--radius);
+}
+.thumb--square {
+  aspect-ratio: 1;
+}
+.thumb--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-muted);
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+}
+.avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius);
+  object-fit: cover;
+  background: var(--color-line);
+  flex-shrink: 0;
+}
+
+/* 숏컷 내비 (연표 연도 / 오퍼레이터 희귀도·직군) */
+.shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.5rem;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  margin: 0.5rem 0 1rem;
+}
+.shortcuts a,
+.shortcuts button {
+  font: inherit;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: var(--color-card);
+  color: var(--color-fg);
+  cursor: pointer;
+  text-decoration: none;
+}
+.shortcuts a:hover,
+.shortcuts button:hover {
+  border-color: var(--color-accent);
+}
+.shortcuts [aria-pressed='true'] {
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.shortcuts__label {
+  align-self: center;
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  margin-right: 0.25rem;
 }
 
 .card {

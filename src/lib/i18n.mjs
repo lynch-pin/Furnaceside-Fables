@@ -180,9 +180,10 @@ export function pickText(byLocale) {
 // ---------------------------------------------------------------------------
 
 /**
- * zh_CN 폴백 텍스트를 한국어로 번역한다.
+ * zh_CN 폴백 텍스트를 한국어로 번역한다. (런타임 placeholder)
  *
- * TODO(translate): 실제 번역 API 연동.
+ * 실제 번역은 빌드 전에 scripts/translate.mjs 가 수행해 translations/ 에 캐시한다.
+ * TODO(translate): 필요하면 이 함수에서 캐시 미스 시 API 를 바로 호출하도록 연결.
  *   - 후보: DeepL / Google Cloud Translation / Papago / LLM(Claude 등)
  *   - 빌드 타임 호출이므로 결과를 `src/data/translations/<hash>.json` 같은 곳에 캐시해
  *     매 빌드마다 API 를 다시 호출하지 않도록 할 것 (비용 + 속도).
@@ -214,8 +215,57 @@ export async function pickTextTranslated(byLocale) {
   return picked;
 }
 
-/** 로케일 표시용 라벨 */
+/** 로케일 표시용 라벨 (서버 기준) */
 export const LOCALE_LABELS = {
-  ko_KR: '한국어',
-  zh_CN: '중국어 (미번역)',
+  ko_KR: 'KR server',
+  zh_CN: 'CN server',
 };
+
+// ---------------------------------------------------------------------------
+// 번역 캐시 (translations/zh_CN/**)
+//   - meta.json                : 그룹/스토리 이름·태그·줄거리   { groups: {id:{name}}, stories: {id:{name, avgTag, summary}} }
+//   - operators/<charId>.json  : CN 전용 오퍼레이터 전체 텍스트 (process-data 의 operator 구조와 동일)
+//   - stories/<storyId>.json   : 스크립트 라인 번역 { lines: string[] } (parseStory 결과에서 text 가 있는 줄 순서)
+//   ko_KR 데이터가 생기면 해당 캐시는 자동으로 무시된다 (ko 우선). 정리는 `npm run translate -- --prune`.
+// ---------------------------------------------------------------------------
+export function translationsRoot(locale = 'zh_CN') {
+  return path.join(PROJECT_ROOT, 'translations', locale);
+}
+
+const trCache = new Map();
+/** translations/<locale>/<rel>.json 을 읽는다. 없으면 null. */
+export function loadTranslation(rel, locale = 'zh_CN') {
+  const key = `${locale}:${rel}`;
+  if (trCache.has(key)) return trCache.get(key);
+  const file = path.join(translationsRoot(locale), `${rel}.json`);
+  const data = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null;
+  trCache.set(key, data);
+  return data;
+}
+
+/**
+ * 파싱된 스토리 라인에 번역 캐시를 적용한다. 캐시가 없거나 줄 수가 맞지 않으면 원문 그대로.
+ * @returns {{ lines: any[], translated: boolean }}
+ */
+export function applyStoryTranslation(storyId, lines, locale = 'zh_CN') {
+  const tr = loadTranslation(`stories/${storyId}`, locale);
+  if (!tr?.lines) return { lines, translated: false };
+  const targets = lines.filter((l) => typeof l.text === 'string' && l.text.length > 0);
+  if (targets.length !== tr.lines.length) {
+    console.warn(`[i18n] ${storyId}: 번역 줄 수 불일치 (${tr.lines.length} vs ${targets.length}) — 원문 표시`);
+    return { lines, translated: false };
+  }
+  let i = 0;
+  const out = lines.map((l) => {
+    if (typeof l.text === 'string' && l.text.length > 0) {
+      const t = tr.lines[i++];
+      return { ...l, text: t, original: l.text };
+    }
+    return l;
+  });
+  // 선택지 옵션 텍스트도 함께 번역되어 있으면 적용
+  if (tr.options) {
+    for (const l of out) if (l.type === 'decision' && tr.options[l.text]) l.options = l.options.map((o) => ({ ...o, text: tr.options[l.text][o.value] ?? o.text }));
+  }
+  return { lines: out, translated: true };
+}

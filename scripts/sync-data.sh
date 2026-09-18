@@ -64,6 +64,44 @@ git -C "$GAMEDATA_DIR" reset --hard --quiet FETCH_HEAD
 git -C "$GAMEDATA_DIR" sparse-checkout reapply
 
 echo "[sync-data] 완료: $(git -C "$GAMEDATA_DIR" rev-parse --short HEAD)"
+
+# ------------------------------------------------------------------------------
+# 이미지 에셋 인덱스 (썸네일 존재 여부 확인용)
+#   ArknightsAssets/ArknightsAssets 저장소는 수 GB 이므로 파일 목록(트리)만 받는다.
+#   실제 이미지는 빌드 시 다운로드하지 않고 raw.githubusercontent.com 에서 직접 불러온다 (src/lib/assets.mjs).
+# ------------------------------------------------------------------------------
+ASSETS_REPO="${ASSETS_REPO:-https://github.com/ArknightsAssets/ArknightsAssets}"
+ASSETS_REF="${ASSETS_REF:-cn}"
+ASSETS_INDEX_DIR="$GAMEDATA_DIR/.assets-index"
+ASSETS_INDEX_FILE="$GAMEDATA_DIR/assets-index.txt"
+if [[ ! -d "$ASSETS_INDEX_DIR/.git" ]]; then
+  echo "[sync-data] 에셋 인덱스 clone (트리만) → $ASSETS_INDEX_DIR"
+  rm -rf "$ASSETS_INDEX_DIR"
+  retry 4 git clone --depth 1 --filter=tree:0 --no-checkout --branch "$ASSETS_REF" "$ASSETS_REPO" "$ASSETS_INDEX_DIR"
+else
+  retry 4 git -C "$ASSETS_INDEX_DIR" fetch --depth 1 origin "$ASSETS_REF"
+  git -C "$ASSETS_INDEX_DIR" reset --soft --quiet FETCH_HEAD
+fi
+git -C "$ASSETS_INDEX_DIR" ls-tree -r --name-only HEAD \
+  | grep -E '^assets/torappu/dynamicassets/(arts/(charavatars|ui/storyreview|ui/homebanners/zone)|avg/(backgrounds|images))/' \
+  > "$ASSETS_INDEX_FILE"
+echo "[sync-data] 에셋 인덱스: $(wc -l < "$ASSETS_INDEX_FILE") 항목"
+
+# 오퍼레이터 아바타는 ArknightsAssets 가 최신 오퍼레이터를 늦게 반영하므로 yuanyan3060/ArknightsGameResource 를 우선 사용
+AVATAR_REPO="${AVATAR_REPO:-https://github.com/yuanyan3060/ArknightsGameResource}"
+AVATAR_REF="${AVATAR_REF:-main}"
+AVATAR_INDEX_DIR="$GAMEDATA_DIR/.avatar-index"
+AVATAR_INDEX_FILE="$GAMEDATA_DIR/avatar-index.txt"
+if [[ ! -d "$AVATAR_INDEX_DIR/.git" ]]; then
+  echo "[sync-data] 아바타 인덱스 clone (트리만) → $AVATAR_INDEX_DIR"
+  rm -rf "$AVATAR_INDEX_DIR"
+  retry 4 git clone --depth 1 --filter=tree:0 --no-checkout --branch "$AVATAR_REF" "$AVATAR_REPO" "$AVATAR_INDEX_DIR"
+else
+  retry 4 git -C "$AVATAR_INDEX_DIR" fetch --depth 1 origin "$AVATAR_REF"
+  git -C "$AVATAR_INDEX_DIR" reset --soft --quiet FETCH_HEAD
+fi
+git -C "$AVATAR_INDEX_DIR" ls-tree -r --name-only HEAD | grep -E '^(avatar|portrait)/' > "$AVATAR_INDEX_FILE"
+echo "[sync-data] 아바타 인덱스: $(wc -l < "$AVATAR_INDEX_FILE") 항목"
 for lang in kr cn; do
   ver_file="$GAMEDATA_DIR/$lang/gamedata/excel/data_version.txt"
   if [[ -f "$ver_file" ]]; then

@@ -4,6 +4,7 @@
  * 탭: 기록(handbook) / 대사(charword) / 오퍼레이터 레코드(handbookAvgList) / 등장 스토리(파서 추출)
  */
 import Layout from '../../layouts/Layout.astro';
+import SourceBadge from '../../components/SourceBadge.astro';
 import { loadOperators, PROFESSION_LABEL } from '../../lib/data.mjs';
 import { richTextToHtml } from '../../lib/story-parser.mjs';
 
@@ -34,10 +35,13 @@ const CV_LABEL: Record<string, string> = { KR: '한국어', JP: '일본어', CN_
   <article class="container container--narrow">
     <header class="op-head">
       <p class="small muted"><a href="/operator">오퍼레이터</a></p>
-      <h1>
-        {op.name} <span class="muted appellation">{op.appellation}</span>
-        {op.needsTranslation && <span class="badge badge--fallback">zh_CN</span>}
-      </h1>
+      <div class="op-head__row">
+        {op.avatar && <img class="avatar op-head__avatar" src={op.avatar} alt="" decoding="async" />}
+        <h1>
+          {op.name} <span class="muted appellation">{op.appellation}</span>
+          <SourceBadge locale={op.sourceLocale} translated={op.translated} />
+        </h1>
+      </div>
       <p class="meta small muted">
         {op.rarity && <span>{'★'.repeat(op.rarity)}</span>}
         <span>{PROFESSION_LABEL[op.profession] ?? op.profession}</span>
@@ -87,7 +91,7 @@ const CV_LABEL: Record<string, string> = { KR: '한국어', JP: '일본어', CN_
       {op.words.map((set: any) => (
         <section class="wordset">
           {op.words.length > 1 && <h3>{set.isDefault ? '기본' : set.wordKey.replace(`${op.id}_`, '')}</h3>}
-          {set.needsTranslation && <p class="badge badge--fallback">zh_CN</p>}
+          <SourceBadge locale={set.sourceLocale} translated={set.translated} />
           <dl class="words">
             {set.lines.map((w: any) => (
               <>
@@ -167,6 +171,15 @@ const CV_LABEL: Record<string, string> = { KR: '한국어', JP: '일본어', CN_
 <style>
   .op-head h1 {
     margin: 0.25rem 0 0.5rem;
+  }
+  .op-head__row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .op-head__avatar {
+    width: 72px;
+    height: 72px;
   }
   .appellation {
     font-weight: 400;

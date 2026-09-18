@@ -1,0 +1,19 @@
+---
+/**
+ * src/components/SourceBadge.astro — 원문 서버 표시.
+ * CN 서버 데이터로 채워진 항목에만 배지를 붙인다. (KR 서버 데이터는 표시 없음)
+ *   translated: 번역본 적용됨 → "CN server · 번역"
+ *   그 외      : 중국어 원문 그대로 → "CN server · 미번역"
+ */
+interface Props {
+  locale?: string | null;
+  translated?: boolean;
+}
+const { locale, translated = false } = Astro.props;
+---
+
+{locale === 'zh_CN' && (
+  <span class="badge badge--fallback" title={translated ? '중국 서버 데이터를 번역해 표시합니다' : '한국 서버에 없는 콘텐츠라 중국어 원문을 표시합니다'}>
+    CN server · {translated ? '번역' : '미번역'}
+  </span>
+)}

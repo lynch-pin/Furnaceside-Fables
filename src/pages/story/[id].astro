@@ -5,8 +5,9 @@
  */
 import Layout from '../../layouts/Layout.astro';
 import StoryReader from '../../components/StoryReader.astro';
+import SourceBadge from '../../components/SourceBadge.astro';
 import { loadStories, loadOperators, KIND_LABEL } from '../../lib/data.mjs';
-import { readStoryText, LOCALE_LABELS } from '../../lib/i18n.mjs';
+import { readStoryText, applyStoryTranslation } from '../../lib/i18n.mjs';
 import { parseStory } from '../../lib/story-parser.mjs';
 
 export async function getStaticPaths() {
@@ -22,8 +23,12 @@ const opName = new Map(operators.map((o) => [o.id, o.name]));
 const nameToId = new Map(operators.map((o) => [o.name, o.id]));
 
 const raw = readStoryText(story.txt);
-const lines = raw ? parseStory(raw.text) : [];
-// TODO(translate): raw.needsTranslation 이면 i18n.translate() 로 lines[].text 를 번역 후 렌더링.
+let lines = raw ? parseStory(raw.text) : [];
+let translated = false;
+if (raw?.needsTranslation) {
+  // CN 원문: translations/zh_CN/stories/<id>.json 캐시가 있으면 적용 (scripts/translate.mjs 로 생성)
+  ({ lines, translated } = applyStoryTranslation(story.id, lines, raw.locale));
+}
 
 // 같은 그룹 내 이전/다음 스토리
 const siblings = group.storyIds.filter((id) => stories.find((s) => s.id === id)?.available);
@@ -49,12 +54,9 @@ const title = [story.code, story.name].filter(Boolean).join(' ');
         <span class="badge">{KIND_LABEL[story.kind]}</span>
         {story.avgTag && <span>{story.avgTag}</span>}
         {story.date && <span>{story.date}</span>}
-        {raw?.needsTranslation && (
-          <span class="badge badge--fallback" title="한국어 데이터가 없어 중국어 원문을 표시합니다">
-            {LOCALE_LABELS[raw.locale]}
-          </span>
-        )}
+        <SourceBadge locale={raw?.locale} translated={translated} />
       </p>
+      {story.image && <img class="thumb story-thumb" src={story.image} alt="" loading="eager" decoding="async" />}
       {story.summary && <p class="summary">{story.summary}</p>}
 
       {story.characters.length > 0 && (
@@ -103,6 +105,10 @@ const title = [story.code, story.name].filter(Boolean).join(' ');
   }
   .summary {
     white-space: pre-line;
+  }
+  .story-thumb {
+    margin: 1rem 0;
+    max-height: 18rem;
   }
   .pager {
     display: flex;

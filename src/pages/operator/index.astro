@@ -1,9 +1,13 @@
 ---
 /**
- * /operator — 오퍼레이터 목록 (희귀도 내림차순 → 이름순)
- * TODO(operator-list): 직군/진영/희귀도 필터, 검색.
+ * /operator — 오퍼레이터 목록.
+ *   - 희귀도(★) 섹션 + 희귀도 숏컷(앵커 이동)
+ *   - 직군 숏컷(클라이언트 필터): 뱅가드/가드/디펜더/스나이퍼/캐스터/메딕/서포터/스페셜리스트
+ *   - 아바타 썸네일
+ * TODO(operator-list): 진영 필터, 이름 검색.
  */
 import Layout from '../../layouts/Layout.astro';
+import SourceBadge from '../../components/SourceBadge.astro';
 import { loadOperators, PROFESSION_LABEL } from '../../lib/data.mjs';
 
 const operators = loadOperators();
@@ -14,6 +18,11 @@ for (const o of operators) {
   byRarity.get(r)!.push(o);
 }
 const rarities = [...byRarity.keys()].sort((a, b) => b - a);
+
+const PROFESSIONS = ['PIONEER', 'WARRIOR', 'TANK', 'SNIPER', 'CASTER', 'MEDIC', 'SUPPORT', 'SPECIAL'];
+const professionCount = (p: string) => operators.filter((o) => o.profession === p).length;
+const stars = (r: number) => (r ? '★'.repeat(r) : '기타');
+const op_locale = (o: any) => o.sourceLocale ?? o.locale ?? null;
 ---
 
 <Layout title="오퍼레이터">
@@ -21,45 +30,108 @@ const rarities = [...byRarity.keys()].sort((a, b) => b - a);
     <h1>오퍼레이터</h1>
     <p class="muted small">{operators.length}명. 이름을 누르면 기록 / 대사 / 오퍼레이터 레코드 / 등장 스토리를 볼 수 있습니다.</p>
 
+    <nav class="shortcuts" aria-label="희귀도">
+      <span class="shortcuts__label">희귀도</span>
+      {rarities.map((r) => (
+        <a href={`#r-${r}`}>{stars(r)} <span class="muted small">{byRarity.get(r)!.length}</span></a>
+      ))}
+    </nav>
+
+    <div class="shortcuts" role="group" aria-label="직군 필터" id="profession-filter">
+      <span class="shortcuts__label">직군</span>
+      <button type="button" data-profession="" aria-pressed="true">전체</button>
+      {PROFESSIONS.map((p) => (
+        <button type="button" data-profession={p} aria-pressed="false">
+          {PROFESSION_LABEL[p]} <span class="muted small">{professionCount(p)}</span>
+        </button>
+      ))}
+    </div>
+
     {rarities.map((r) => (
-      <section>
-        <h2>{r ? `${'★'.repeat(r)}` : '기타'} <span class="muted small">{byRarity.get(r)!.length}</span></h2>
+      <section id={`r-${r}`} class="rarity">
+        <h2>{stars(r)} <span class="muted small count" data-total={byRarity.get(r)!.length}>{byRarity.get(r)!.length}</span></h2>
         <ul class="list-plain grid">
           {byRarity.get(r)!.map((o) => (
-            <li>
+            <li data-profession={o.profession}>
               <a class="card op" href={`/operator/${o.id}`}>
-                <span class="op__name">{o.name}</span>
-                <span class="muted small">
-                  {PROFESSION_LABEL[o.profession] ?? o.profession}
-                  {o.nationName ? ` · ${o.nationName}` : ''}
+                {o.avatar ? <img class="avatar" src={o.avatar} alt="" loading="lazy" decoding="async" /> : <span class="avatar" />}
+                <span class="op__text">
+                  <span class="op__name">{o.name} <SourceBadge locale={op_locale(o)} translated={o.translated} /></span>
+                  <span class="muted small">
+                    {PROFESSION_LABEL[o.profession] ?? o.profession}
+                    {o.nationName ? ` · ${o.nationName}` : ''}
+                  </span>
+                  {o.appearances.length > 0 && <span class="small muted">등장 {o.appearances.length}편</span>}
                 </span>
-                {o.appearances.length > 0 && <span class="small muted">등장 {o.appearances.length}편</span>}
               </a>
             </li>
           ))}
         </ul>
+        <p class="muted small empty" hidden>이 희귀도에는 선택한 직군의 오퍼레이터가 없습니다.</p>
       </section>
     ))}
   </div>
 </Layout>
 
+<script>
+  // 직군 필터: data-profession 이 일치하지 않는 카드를 숨긴다. URL 해시(#p=WARRIOR)로 초기 상태 복원.
+  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('#profession-filter button'));
+  const cards = Array.from(document.querySelectorAll<HTMLLIElement>('.grid > li'));
+  const apply = (prof: string) => {
+    for (const b of buttons) b.setAttribute('aria-pressed', String((b.dataset.profession ?? '') === prof));
+    for (const c of cards) c.hidden = Boolean(prof) && c.dataset.profession !== prof;
+    document.querySelectorAll<HTMLElement>('.rarity').forEach((sec) => {
+      const visible = sec.querySelectorAll('.grid > li:not([hidden])').length;
+      const count = sec.querySelector<HTMLElement>('.count');
+      if (count) count.textContent = String(visible);
+      const empty = sec.querySelector<HTMLElement>('.empty');
+      if (empty) empty.hidden = visible > 0;
+    });
+  };
+  for (const b of buttons) {
+    b.addEventListener('click', () => {
+      const prof = b.dataset.profession ?? '';
+      apply(prof);
+      history.replaceState(null, '', prof ? `#p=${prof}` : location.pathname);
+    });
+  }
+  const m = location.hash.match(/^#p=([A-Z]+)$/);
+  if (m) apply(m[1]);
+</script>
+
 <style>
+  .rarity h2 {
+    position: sticky;
+    top: 0;
+    background: var(--color-bg);
+    padding: 0.4rem 0;
+    margin: 1.25rem 0 0.5rem;
+    border-bottom: 1px solid var(--color-line);
+    z-index: 1;
+  }
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
     gap: 0.5rem;
-    margin-bottom: 2rem;
+    margin-bottom: 1rem;
   }
   .op {
     display: flex;
-    flex-direction: column;
-    padding: 0.6rem 0.8rem;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.5rem 0.7rem;
     color: inherit;
     height: 100%;
   }
   .op:hover {
     border-color: var(--color-accent);
     text-decoration: none;
+  }
+  .op__text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.35;
+    min-width: 0;
   }
   .op__name {
     font-weight: 600;

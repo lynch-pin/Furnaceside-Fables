@@ -40,12 +40,19 @@ const isActive = (href: string) => (href === '/' ? current === '/' : current.sta
       rel="stylesheet"
     />
     <!-- TODO(seo): astro.config.mjs 의 site 설정 후 canonical / og 태그 추가 -->
+    <!-- 테마: 첫 페인트 전에 저장된 설정을 적용해 깜빡임 방지. 값: 'light' | 'dark' | (없음 = 시스템 설정) -->
+    <script is:inline>
+      try {
+        const t = localStorage.getItem('theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch {}
+    </script>
   </head>
   <body>
     <header class="site-header">
       <div class="container site-header__inner">
         <a class="site-brand" href="/">{SITE_NAME}</a>
-        <nav aria-label="주 메뉴">
+        <nav aria-label="주 메뉴" class="site-nav-wrap">
           <ul class="list-plain site-nav">
             {NAV.map((item) => (
               <li>
@@ -53,9 +60,44 @@ const isActive = (href: string) => (href === '/' ? current === '/' : current.sta
               </li>
             ))}
           </ul>
+          <button class="theme-toggle" id="theme-toggle" type="button" aria-label="테마 전환" title="테마: 시스템">
+            <span data-theme-icon="auto">◐</span>
+            <span data-theme-icon="light">☀</span>
+            <span data-theme-icon="dark">☾</span>
+          </button>
         </nav>
       </div>
     </header>
+
+    <script>
+      // 테마 토글: 시스템(auto) → 라이트 → 다크 → 시스템 …
+      const ORDER = ['auto', 'light', 'dark'] as const;
+      const LABEL: Record<string, string> = { auto: '시스템', light: '라이트', dark: '다크' };
+      const btn = document.getElementById('theme-toggle');
+      const current = () => {
+        const t = document.documentElement.dataset.theme;
+        return t === 'light' || t === 'dark' ? t : 'auto';
+      };
+      const render = () => {
+        const cur = current();
+        btn?.querySelectorAll<HTMLElement>('[data-theme-icon]').forEach((el) => {
+          el.hidden = el.dataset.themeIcon !== cur;
+        });
+        btn?.setAttribute('title', `테마: ${LABEL[cur]}`);
+      };
+      btn?.addEventListener('click', () => {
+        const next = ORDER[(ORDER.indexOf(current()) + 1) % ORDER.length];
+        if (next === 'auto') {
+          delete document.documentElement.dataset.theme;
+          try { localStorage.removeItem('theme'); } catch {}
+        } else {
+          document.documentElement.dataset.theme = next;
+          try { localStorage.setItem('theme', next); } catch {}
+        }
+        render();
+      });
+      render();
+    </script>
 
     <main class="site-main">
       <slot />
@@ -89,11 +131,31 @@ const isActive = (href: string) => (href === '/' ? current === '/' : current.sta
         color: var(--color-fg);
         letter-spacing: 0.02em;
       }
+      .site-nav-wrap {
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+      }
       .site-nav {
         display: flex;
         gap: 1.25rem;
         font-family: var(--font-sans);
         font-size: 0.95rem;
+      }
+      .theme-toggle {
+        font: inherit;
+        font-size: 1rem;
+        line-height: 1;
+        width: 2rem;
+        height: 2rem;
+        border: 1px solid var(--color-line);
+        border-radius: 50%;
+        background: var(--color-card);
+        color: var(--color-fg);
+        cursor: pointer;
+      }
+      .theme-toggle:hover {
+        border-color: var(--color-accent);
       }
       .site-nav a {
         color: var(--color-muted);

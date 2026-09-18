@@ -1,13 +1,14 @@
 ---
 /**
- * /timeline — 스토리 연표. 정렬 기준은 스토리 안에서 벌어지는 세계관 연도(테라 력).
- *   - 연도는 scripts/process-data.mjs 가 overrides → 인게임 아카이브 → 스크립트 날짜 스탬프 순으로 결정
- *   - 연도를 못 찾은 이벤트는 마지막 "연대 미상" 구역에 출시 순으로
- *   - 각 스토리는 클릭(터치) 시 리더로 이동
+ * /timeline — 스토리 연표. 개별 스토리 단위, 스토리 안에서 벌어지는 세계관 연도(테라 력) 기준 정렬.
+ *   - 연도 결정: overrides → 본문 날짜 스탬프 → 인게임 아카이브 → 같은 그룹의 다른 스토리 (scripts/process-data.mjs)
+ *   - 연도를 못 찾은 스토리는 마지막 "연대 미상" 구역에 출시 순으로
+ *   - 카드(썸네일/제목)를 누르면 리더로 이동
  *
- * TODO(timeline): loreSource === 'text' 는 자동 추정이므로 검수 후 overrides/timeline.json 에 확정값을 넣을 것.
+ * TODO(timeline): loreSource 가 'text' / 'group-text' 인 항목은 자동 추정이므로 검수 후 overrides/timeline.json 에 확정값을 넣을 것.
  */
 import Layout from '../layouts/Layout.astro';
+import SourceBadge from '../components/SourceBadge.astro';
 import { loadTimeline, KIND_LABEL } from '../lib/data.mjs';
 
 const timeline = loadTimeline();
@@ -15,16 +16,16 @@ const timeline = loadTimeline();
 const SOURCE_LABEL: Record<string, string> = {
   override: '확정',
   archive: '인게임 아카이브',
-  text: '자동 추정',
+  text: '본문 날짜',
+  'group-text': '같은 이벤트 추정',
 };
 
-// 연도별로 묶기 (null 은 "연대 미상")
 const UNKNOWN = '연대 미상';
 const byYear = new Map<string, typeof timeline>();
-for (const g of timeline) {
-  const key = g.loreYear ? String(g.loreYear) : UNKNOWN;
+for (const t of timeline) {
+  const key = t.loreYear ? String(t.loreYear) : UNKNOWN;
   if (!byYear.has(key)) byYear.set(key, []);
-  byYear.get(key)!.push(g);
+  byYear.get(key)!.push(t);
 }
 const anchor = (key: string) => (key === UNKNOWN ? 'y-unknown' : `y-${key}`);
 const heading = (key: string) => (key === UNKNOWN ? UNKNOWN : `${key}년`);
@@ -34,61 +35,64 @@ const heading = (key: string) => (key === UNKNOWN ? UNKNOWN : `${key}년`);
   <div class="container">
     <h1>연표</h1>
     <p class="muted small">
-      테라 력 기준. 연도는 스토리 본문의 날짜 표기와 인게임 아카이브에서 추출했으며, "자동 추정" 표시는 검수 전입니다.
-      연도가 확인되지 않은 이벤트는 맨 아래 "연대 미상"에 출시 순으로 있습니다. 스토리 제목을 누르면 리더로 이동합니다.
+      테라 력 기준, 스토리 단위. 연도는 본문의 날짜 표기·인게임 아카이브에서 추출했고, 확인되지 않은 스토리는 맨 아래 "연대 미상"에 출시 순으로 있습니다.
     </p>
 
-    <nav class="years" aria-label="연도">
+    <nav class="shortcuts" aria-label="연도">
       {[...byYear.keys()].map((y) => (
         <a href={`#${anchor(y)}`}>{heading(y)} <span class="muted small">{byYear.get(y)!.length}</span></a>
       ))}
     </nav>
 
-    {[...byYear.entries()].map(([year, groups]) => (
+    {[...byYear.entries()].map(([year, items]) => (
       <section class="year" id={anchor(year)}>
-        <h2>{heading(year)}</h2>
-        <ol class="list-plain events">
-          {groups.map((g) => (
-            <li class="event" id={g.id}>
-              <div class="event__head">
-                <span class="badge">{g.chapter?.label ?? KIND_LABEL[g.kind]}</span>
-                <h3 class="event__title">
-                  {g.name}
-                  {g.needsTranslation && <span class="badge badge--fallback">zh_CN</span>}
-                </h3>
-                {g.loreLabel && g.loreLabel !== `${g.loreYear}년` && <span class="lore-label">{g.loreLabel}</span>}
-                {g.loreSource && (
-                  <span
-                    class:list={['source', `source--${g.loreSource}`]}
-                    title={g.loreEvidence?.map((e: any) => e.text).join('\n') || undefined}
-                  >
-                    {SOURCE_LABEL[g.loreSource]}
-                  </span>
+        <h2>{heading(year)} <span class="muted small">{items.length}편</span></h2>
+        <ol class="list-plain entries">
+          {items.map((t, i) => {
+            const newGroup = i === 0 || items[i - 1].groupId !== t.groupId;
+            return (
+              <li class:list={['entry', { 'entry--group-start': newGroup }]} id={t.id}>
+                {newGroup && (
+                  <div class="entry__group">
+                    <span class="badge">{t.chapter?.label ?? KIND_LABEL[t.kind]}</span>
+                    <a class="entry__group-name" href={`/story#${t.groupId}`}>{t.groupName}</a>
+                    <span class="muted small" title="게임 내 공개일 (참고)">출시 {t.releaseDate ?? '-'}</span>
+                  </div>
                 )}
-                <span class="release muted small" title="게임 내 공개일 (참고)">출시 {g.releaseDate ?? '-'}</span>
-              </div>
-              <ul class="list-plain stories">
-                {g.stories.map((s: any) => (
-                  <li>
-                    {s.available ? (
-                      <a class="story-link" href={`/story/${s.id}`}>
-                        {s.code && <span class="code">{s.code}</span>}
-                        <span>{s.name}</span>
-                        {s.avgTag && <span class="muted small">{s.avgTag}</span>}
-                        {s.loreYear && s.loreYear !== g.loreYear && <span class="story-year">{s.loreYear}년</span>}
-                      </a>
+                {t.available ? (
+                  <a class="card entry__card" href={`/story/${t.id}`}>
+                    {t.image ? (
+                      <img class="thumb entry__thumb" src={t.image} alt="" loading="lazy" decoding="async" />
                     ) : (
-                      <span class="story-link muted">
-                        {s.code && <span class="code">{s.code}</span>}
-                        <span>{s.name}</span>
-                        <span class="small">(원문 없음)</span>
-                      </span>
+                      <div class="thumb entry__thumb thumb--placeholder">{t.code ?? '—'}</div>
                     )}
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))}
+                    <div class="entry__body">
+                      <div class="entry__title">
+                        {t.code && <span class="code">{t.code}</span>}
+                        <strong>{t.name}</strong>
+                      </div>
+                      <div class="entry__meta small muted">
+                        {t.avgTag && <span>{t.avgTag}</span>}
+                        {t.loreLabel && <span>{t.loreLabel}</span>}
+                        {t.loreSource && (
+                          <span class:list={['source', `source--${t.loreSource}`]} title={t.loreEvidence?.map((e: any) => e.text).join('\n') || undefined}>
+                            {SOURCE_LABEL[t.loreSource] ?? t.loreSource}
+                          </span>
+                        )}
+                        <SourceBadge locale={t.sourceLocale} translated={t.translated} />
+                      </div>
+                    </div>
+                  </a>
+                ) : (
+                  <div class="card entry__card muted">
+                    <div class="entry__body">
+                      {t.code && <span class="code">{t.code}</span>} {t.name} <span class="small">(원문 없음)</span>
+                    </div>
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ol>
       </section>
     ))}
@@ -96,13 +100,6 @@ const heading = (key: string) => (key === UNKNOWN ? UNKNOWN : `${key}년`);
 </Layout>
 
 <style>
-  .years {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem 1rem;
-    font-family: var(--font-sans);
-    margin-bottom: 1.5rem;
-  }
   .year h2 {
     position: sticky;
     top: 0;
@@ -112,85 +109,83 @@ const heading = (key: string) => (key === UNKNOWN ? UNKNOWN : `${key}년`);
     border-bottom: 1px solid var(--color-line);
     z-index: 1;
   }
-  .events {
+  .entries {
     border-left: 2px solid var(--color-line);
     margin-left: 0.5rem;
     padding-left: 1.25rem;
+    display: grid;
+    gap: 0.5rem;
   }
-  .event {
+  .entry--group-start {
+    margin-top: 1rem;
     position: relative;
-    padding: 0.75rem 0 1.25rem;
   }
-  .event::before {
+  .entry--group-start::before {
     content: '';
     position: absolute;
     left: calc(-1.25rem - 6px);
-    top: 1.35rem;
+    top: 0.45rem;
     width: 10px;
     height: 10px;
     border-radius: 50%;
     background: var(--color-accent);
   }
-  .event__head {
+  .entry__group {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem 0.75rem;
+    gap: 0.4rem 0.75rem;
+    margin-bottom: 0.4rem;
   }
-  .event__title {
-    margin: 0;
-    font-size: 1.15rem;
+  .entry__group-name {
+    font-weight: 600;
+    color: var(--color-fg);
   }
-  .lore-label {
+  .entry__card {
+    display: grid;
+    grid-template-columns: 9rem 1fr;
+    gap: 0.9rem;
+    padding: 0.6rem;
+    color: inherit;
+  }
+  a.entry__card:hover {
+    border-color: var(--color-accent);
+    text-decoration: none;
+  }
+  .entry__thumb {
+    border-radius: 4px;
+  }
+  .entry__title {
+    display: flex;
+    gap: 0.4rem;
+    align-items: baseline;
+    flex-wrap: wrap;
+  }
+  .entry__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.6rem;
+    margin-top: 0.25rem;
     font-family: var(--font-sans);
-    font-size: 0.85rem;
+  }
+  .code {
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    color: var(--color-accent);
   }
   .source {
-    font-family: var(--font-sans);
-    font-size: 0.72rem;
-    padding: 0.2em 0.5em;
+    padding: 0.05em 0.45em;
     border-radius: 3px;
     border: 1px solid var(--color-line);
-    color: var(--color-muted);
     cursor: help;
   }
   .source--override {
     border-color: var(--color-accent);
     color: var(--color-accent);
   }
-  .release {
-    font-family: var(--font-sans);
-    margin-left: auto;
-  }
-  .stories {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem 0.5rem;
-    margin-top: 0.5rem;
-  }
-  .story-link {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 0.4rem;
-    padding: 0.35rem 0.6rem; /* 터치 타깃 확보 */
-    border: 1px solid var(--color-line);
-    border-radius: var(--radius);
-    background: var(--color-card);
-    color: inherit;
-    font-size: 0.92rem;
-  }
-  a.story-link:hover {
-    border-color: var(--color-accent);
-    text-decoration: none;
-  }
-  .code {
-    font-family: var(--font-sans);
-    font-size: 0.75rem;
-    color: var(--color-accent);
-  }
-  .story-year {
-    font-family: var(--font-sans);
-    font-size: 0.72rem;
-    color: var(--color-muted);
+  @media (max-width: 480px) {
+    .entry__card {
+      grid-template-columns: 6rem 1fr;
+    }
   }
 </style>

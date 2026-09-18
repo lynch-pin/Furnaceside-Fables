@@ -12,26 +12,28 @@ const operators = loadOperators();
 
 // 연표 미리보기: 세계관 연도별 이벤트 수 (연대 미상은 제외)
 const yearCounts = new Map<number, number>();
-for (const g of timeline) if (g.loreYear) yearCounts.set(g.loreYear, (yearCounts.get(g.loreYear) ?? 0) + 1);
-const unresolved = timeline.filter((g) => !g.loreYear).length;
-// 최근 출시 이벤트 5개 (참고용)
-const recent = [...timeline].sort((a, b) => b.releaseTimestamp - a.releaseTimestamp).slice(0, 5);
+for (const t of timeline) if (t.loreYear) yearCounts.set(t.loreYear, (yearCounts.get(t.loreYear) ?? 0) + 1);
+const unresolved = timeline.filter((t) => !t.loreYear).length;
+// 최근 출시 이벤트 5개 (참고용, 그룹 단위로 중복 제거)
+const seen = new Set<string>();
+const recent = [...timeline]
+  .sort((a, b) => b.releaseTimestamp - a.releaseTimestamp)
+  .filter((t) => (seen.has(t.groupId) ? false : (seen.add(t.groupId), true)))
+  .slice(0, 5);
 ---
 
 <Layout>
   <div class="container">
     <section class="hero">
       <h1>Furnaceside Fables</h1>
-      <p class="muted">
-        아크나이츠 스토리를 시간순으로 읽고, 오퍼레이터별 기록과 등장 스토리를 찾아보는 아카이브.
-        <!-- TODO(home): 소개 문구 / 대표 이미지 -->
-      </p>
+      <p class="muted tagline">Arknights Story Reader with Timeline</p>
+      <!-- TODO(home): 대표 이미지 -->
     </section>
 
     <section class="quick">
       <a class="card quick__item" href="/timeline">
         <strong>연표</strong>
-        <span class="muted small">{timeline.length}개 이벤트 · 시간순</span>
+        <span class="muted small">{timeline.length}편 · 테라 력 순</span>
       </a>
       <a class="card quick__item" href="/story">
         <strong>스토리</strong>
@@ -51,7 +53,7 @@ const recent = [...timeline].sort((a, b) => b.releaseTimestamp - a.releaseTimest
           <li>
             <a class="card years__item" href={`/timeline#y-${year}`}>
               <strong>{year}년</strong>
-              <span class="muted small">{n}개 이벤트</span>
+              <span class="muted small">{n}편</span>
             </a>
           </li>
         ))}
@@ -59,7 +61,7 @@ const recent = [...timeline].sort((a, b) => b.releaseTimestamp - a.releaseTimest
           <li>
             <a class="card years__item" href="/timeline#y-unknown">
               <strong>연대 미상</strong>
-              <span class="muted small">{unresolved}개 이벤트</span>
+              <span class="muted small">{unresolved}편</span>
             </a>
           </li>
         )}
@@ -74,8 +76,8 @@ const recent = [...timeline].sort((a, b) => b.releaseTimestamp - a.releaseTimest
           <li class="preview__item">
             <span class="preview__date muted small">{g.releaseDate}</span>
             <span class="badge">{KIND_LABEL[g.kind]}</span>
-            <a href={`/timeline#${g.id}`}>{g.name}</a>
-            {g.needsTranslation && <span class="badge badge--fallback">zh_CN</span>}
+            <a href={`/story#${g.groupId}`}>{g.groupName}</a>
+            {g.sourceLocale === 'zh_CN' && <span class="badge badge--fallback">CN server</span>}
             <span class="muted small">{g.loreYear ? `${g.loreYear}년` : '연대 미상'}</span>
           </li>
         ))}
@@ -93,7 +95,12 @@ const recent = [...timeline].sort((a, b) => b.releaseTimestamp - a.releaseTimest
     margin-bottom: 2rem;
   }
   .hero h1 {
-    margin: 0 0 0.5rem;
+    margin: 0 0 0.25rem;
+  }
+  .tagline {
+    font-family: var(--font-sans);
+    letter-spacing: 0.02em;
+    margin: 0;
   }
   .quick {
     display: grid;
