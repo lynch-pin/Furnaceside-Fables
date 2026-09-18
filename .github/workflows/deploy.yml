@@ -1,0 +1,80 @@
+# .github/workflows/deploy.yml
+# GitHub Pages 배포.
+#   - main 브랜치 push 시
+#   - 매주 월요일 09:00 KST (= 일요일 24:00 UTC = 월요일 00:00 UTC) 게임 데이터 자동 갱신 후 재배포
+#   - 수동 실행(workflow_dispatch)
+#
+# 사전 설정 (1회): 저장소 Settings → Pages → Source 를 "GitHub Actions" 로.
+# 커스텀 도메인: public/CNAME 파일 + Settings → Pages → Custom domain (fables.lone-trail.com) + DNS CNAME.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 0 * * 1' # 월요일 00:00 UTC = 월요일 09:00 KST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 동시 배포 방지 (진행 중 배포는 취소하지 않음)
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # gamedata/ sparse clone(~600MB) 을 캐시해 매주 전체 재다운로드를 피한다.
+      # run_id 를 키에 섞어 매 실행마다 최신 상태를 새로 저장하고, restore-keys 로 직전 캐시를 복원한다.
+      # sync-data.sh 가 복원된 clone 위에서 fetch 로 증분 갱신한다.
+      - name: Cache gamedata
+        uses: actions/cache@v4
+        with:
+          path: gamedata
+          key: gamedata-v1-${{ github.run_id }}
+          restore-keys: |
+            gamedata-v1-
+
+      # npm ci 가 "prepare" 스크립트(sync && process)를 실행한다.
+      - name: Install dependencies (runs sync + process)
+        run: npm ci
+        env:
+          # TODO(translate): 번역 API 키가 필요해지면 secrets 로 주입
+          # TRANSLATE_API_KEY: ${{ secrets.TRANSLATE_API_KEY }}
+          GIT_LFS_SKIP_SMUDGE: '1'
+
+      - name: Show data versions
+        run: cat src/data/meta.json
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

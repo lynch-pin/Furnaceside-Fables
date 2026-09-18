@@ -1,0 +1,24 @@
+# 의존성 / 빌드 산출물
+node_modules/
+dist/
+.astro/
+
+# 게임 데이터 원본 (scripts/sync-data.sh 가 sparse-checkout 으로 받아오는 git 저장소)
+# 수백 MB 규모이므로 절대 커밋하지 않는다.
+gamedata/
+
+# 가공된 데이터 (scripts/process-data.mjs 출력)
+# ------------------------------------------------------------------
+# src/data/*.json 을 gitignore 할지 여부는 운영 방식에 따라 결정:
+#   - 커밋하는 경우: 로컬 clone 직후 `npm run dev` 가 바로 동작하고, 데이터 변경 이력이 git 에 남는다.
+#     대신 매주 CI 갱신마다 수 MB 단위 diff 가 쌓인다. (operators.json 이 가장 크다)
+#   - 무시하는 경우: 저장소가 가벼워지지만, 개발 전 `npm run prepare` 가 필수.
+#     CI (deploy.yml) 는 어차피 매 빌드마다 sync → process 를 다시 수행하므로 배포에는 영향 없다.
+# 현재는 무시하지 않음(커밋 가능). 무시하려면 아래 줄의 주석을 해제.
+# src/data/*.json
+
+# 로컬 환경
+.env
+.env.*
+!.env.example
+.DS_Store

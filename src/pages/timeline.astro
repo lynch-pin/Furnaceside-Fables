@@ -1,0 +1,151 @@
+---
+/**
+ * /timeline — 스토리 연표 (공개 시간순). 각 스토리는 클릭 시 리더로 이동.
+ *
+ * TODO(timeline): 세계관 연대(lore) 기준 정렬 토글. timeline.json 의 각 항목에 `lore` 필드가
+ *   채워지면(overrides/timeline.json) 그 값으로 정렬하는 두 번째 뷰를 추가.
+ */
+import Layout from '../layouts/Layout.astro';
+import { loadTimeline, KIND_LABEL } from '../lib/data.mjs';
+
+const timeline = loadTimeline();
+
+// 연도별로 묶기
+const byYear = new Map<string, typeof timeline>();
+for (const g of timeline) {
+  const year = (g.date ?? '????').slice(0, 4);
+  if (!byYear.has(year)) byYear.set(year, []);
+  byYear.get(year)!.push(g);
+}
+---
+
+<Layout title="연표">
+  <div class="container">
+    <h1>연표</h1>
+    <p class="muted small">
+      게임 내 공개 순서(한국 서버 기준, 미출시 콘텐츠는 중국 서버 날짜). 스토리 제목을 누르면 리더로 이동합니다.
+    </p>
+
+    <nav class="years" aria-label="연도">
+      {[...byYear.keys()].map((y) => <a href={`#y-${y}`}>{y}</a>)}
+    </nav>
+
+    {[...byYear.entries()].map(([year, groups]) => (
+      <section class="year" id={`y-${year}`}>
+        <h2>{year}</h2>
+        <ol class="list-plain events">
+          {groups.map((g) => (
+            <li class="event" id={g.id}>
+              <div class="event__head">
+                <time class="event__date" datetime={g.date}>{g.date}</time>
+                <span class="badge">{g.chapter?.label ?? KIND_LABEL[g.kind]}</span>
+                <h3 class="event__title">
+                  {g.name}
+                  {g.needsTranslation && <span class="badge badge--fallback">zh_CN</span>}
+                </h3>
+              </div>
+              <ul class="list-plain stories">
+                {g.stories.map((s) => (
+                  <li>
+                    {s.available ? (
+                      <a class="story-link" href={`/story/${s.id}`}>
+                        {s.code && <span class="code">{s.code}</span>}
+                        <span>{s.name}</span>
+                        {s.avgTag && <span class="muted small">{s.avgTag}</span>}
+                      </a>
+                    ) : (
+                      <span class="story-link muted">
+                        {s.code && <span class="code">{s.code}</span>}
+                        <span>{s.name}</span>
+                        <span class="small">(원문 없음)</span>
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ol>
+      </section>
+    ))}
+  </div>
+</Layout>
+
+<style>
+  .years {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    font-family: var(--font-sans);
+    margin-bottom: 1.5rem;
+  }
+  .year h2 {
+    position: sticky;
+    top: 0;
+    background: var(--color-bg);
+    padding: 0.5rem 0;
+    margin: 1.5rem 0 0.5rem;
+    border-bottom: 1px solid var(--color-line);
+    z-index: 1;
+  }
+  .events {
+    border-left: 2px solid var(--color-line);
+    margin-left: 0.5rem;
+    padding-left: 1.25rem;
+  }
+  .event {
+    position: relative;
+    padding: 0.75rem 0 1.25rem;
+  }
+  .event::before {
+    content: '';
+    position: absolute;
+    left: calc(-1.25rem - 6px);
+    top: 1.35rem;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--color-accent);
+  }
+  .event__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+  }
+  .event__date {
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    color: var(--color-muted);
+  }
+  .event__title {
+    margin: 0;
+    font-size: 1.15rem;
+  }
+  .stories {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.5rem;
+    margin-top: 0.5rem;
+  }
+  .story-link {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    padding: 0.35rem 0.6rem; /* 터치 타깃 확보 */
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius);
+    background: var(--color-card);
+    color: inherit;
+    font-size: 0.92rem;
+  }
+  a.story-link:hover {
+    border-color: var(--color-accent);
+    text-decoration: none;
+  }
+  .code {
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    color: var(--color-accent);
+  }
+</style>

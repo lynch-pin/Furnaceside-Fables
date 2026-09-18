@@ -1,0 +1,167 @@
+---
+/**
+ * src/components/StoryReader.astro — 파싱된 스토리 라인 렌더링.
+ * props:
+ *   lines        parseStory() 결과
+ *   nameToId?    화자 이름 → 오퍼레이터 id (이름을 오퍼레이터 페이지로 링크)
+ *
+ * TODO(reader): 배경/CG 이미지 표시, 선택지 분기 접기, 폰트 크기 조절 등은 여기서 확장.
+ */
+import { richTextToHtml } from '../lib/story-parser.mjs';
+
+interface Props {
+  lines: Array<Record<string, any>>;
+  nameToId?: Map<string, string>;
+}
+
+const { lines, nameToId = new Map() } = Astro.props;
+const html = (t: string) => richTextToHtml(t ?? '');
+const branchLabel = (b?: string[]) => (b ? `선택 ${b.join(', ')}` : null);
+---
+
+<div class="reader">
+  {lines.map((line) => {
+    const branch = branchLabel(line.branch);
+    switch (line.type) {
+      case 'header':
+        return null; /* 내부용 제목(중국어 원제)은 표시하지 않음 */
+      case 'dialogue': {
+        const opId = nameToId.get(line.speaker);
+        return (
+          <div class:list={['line', 'line--dialogue', { 'line--continued': line.continued }]} data-branch={branch}>
+            <span class="speaker">
+              {opId ? <a href={`/operator/${opId}`}>{line.speaker}</a> : line.speaker}
+            </span>
+            <p class="text" set:html={html(line.text)} />
+          </div>
+        );
+      }
+      case 'narration':
+        return <p class="line line--narration" data-branch={branch} set:html={html(line.text)} />;
+      case 'decision':
+        return (
+          <div class="line line--decision">
+            <span class="decision-label">선택지</span>
+            <ol>
+              {line.options.map((o: any) => (
+                <li value={Number(o.value) || undefined}>{o.text}</li>
+              ))}
+            </ol>
+          </div>
+        );
+      case 'predicate':
+        return (
+          <div class:list={['line', 'line--predicate', { 'line--merged': line.merged }]}>
+            {line.merged ? '— 분기 합류 —' : `— 선택 ${line.references.join(', ')} —`}
+          </div>
+        );
+      case 'subtitle':
+        return <p class="line line--subtitle" data-branch={branch} set:html={html(line.text)} />;
+      case 'sticker':
+        return <p class="line line--sticker" data-branch={branch} set:html={html(line.text)} />;
+      case 'caption':
+        return <p class="line line--caption" data-branch={branch}>{line.text}</p>;
+      case 'scene':
+        return <hr class="line line--scene" data-image={line.image ?? undefined} />;
+      case 'image':
+        return <div class="line line--image muted small" data-image={line.image}>[CG: {line.image}]</div>;
+      case 'tutorial':
+        return <p class="line line--tutorial" data-branch={branch} set:html={html(line.text)} />;
+      default:
+        return null;
+    }
+  })}
+</div>
+
+<style>
+  .reader {
+    max-width: var(--measure);
+    margin: 0 auto;
+  }
+  .line {
+    margin: 0 0 1rem;
+  }
+  .line--dialogue {
+    display: grid;
+    grid-template-columns: minmax(5rem, 7.5rem) 1fr;
+    gap: 0.75rem;
+    align-items: baseline;
+  }
+  .line--continued {
+    margin-top: -0.6rem;
+  }
+  .line--continued .speaker {
+    visibility: hidden;
+  }
+  .speaker {
+    font-weight: 600;
+    text-align: right;
+    color: var(--color-accent);
+    font-size: 0.95em;
+  }
+  .speaker a {
+    color: inherit;
+  }
+  .text {
+    margin: 0;
+  }
+  .line--narration {
+    color: var(--color-muted);
+  }
+  .line--subtitle {
+    text-align: center;
+    font-style: italic;
+  }
+  .line--sticker {
+    white-space: pre-line;
+    padding: 0.75rem 1rem;
+    border-left: 3px solid var(--color-line);
+  }
+  .line--caption {
+    text-align: center;
+    font-family: var(--font-sans);
+    font-size: 0.85em;
+    letter-spacing: 0.05em;
+    color: var(--color-muted);
+  }
+  .line--scene {
+    border: 0;
+    border-top: 1px dashed var(--color-line);
+    margin: 2rem auto;
+    width: 40%;
+  }
+  .line--decision {
+    background: var(--color-accent-soft);
+    border-radius: var(--radius);
+    padding: 0.75rem 1rem;
+  }
+  .decision-label {
+    font-family: var(--font-sans);
+    font-size: 0.8em;
+    color: var(--color-accent);
+  }
+  .line--decision ol {
+    margin: 0.25rem 0 0;
+    padding-left: 1.5rem;
+  }
+  .line--predicate {
+    text-align: center;
+    font-family: var(--font-sans);
+    font-size: 0.8em;
+    color: var(--color-muted);
+  }
+  .line--tutorial {
+    font-family: var(--font-sans);
+    font-size: 0.9em;
+    color: var(--color-muted);
+  }
+  @media (max-width: 480px) {
+    .line--dialogue {
+      grid-template-columns: 1fr;
+      gap: 0.1rem;
+    }
+    .speaker {
+      text-align: left;
+    }
+  }
+</style>

@@ -1,0 +1,225 @@
+---
+/**
+ * /operator/[id] — 오퍼레이터 개별 페이지.
+ * 탭: 기록(handbook) / 대사(charword) / 오퍼레이터 레코드(handbookAvgList) / 등장 스토리(파서 추출)
+ */
+import Layout from '../../layouts/Layout.astro';
+import { loadOperators, PROFESSION_LABEL } from '../../lib/data.mjs';
+import { richTextToHtml } from '../../lib/story-parser.mjs';
+
+export async function getStaticPaths() {
+  return loadOperators().map((o) => ({ params: { id: o.id }, props: { op: o } }));
+}
+
+const { op } = Astro.props;
+
+const TABS = [
+  { id: 'records', label: '기록', count: op.records.length },
+  { id: 'words', label: '대사', count: op.words.reduce((n: number, w: any) => n + w.lines.length, 0) },
+  { id: 'op-records', label: '오퍼레이터 레코드', count: op.operatorRecords.length },
+  { id: 'appearances', label: '등장 스토리', count: op.appearances.length },
+];
+
+// 등장 스토리를 그룹(이벤트) 단위로 묶기
+const appearancesByGroup = new Map<string, { name: string; date: string | null; items: any[] }>();
+for (const a of op.appearances) {
+  if (!appearancesByGroup.has(a.groupId)) appearancesByGroup.set(a.groupId, { name: a.groupName, date: a.date, items: [] });
+  appearancesByGroup.get(a.groupId)!.items.push(a);
+}
+
+const CV_LABEL: Record<string, string> = { KR: '한국어', JP: '일본어', CN_MANDARIN: '중국어', CN_TOPOLECT: '중국어(방언)', EN: '영어' };
+---
+
+<Layout title={op.name}>
+  <article class="container container--narrow">
+    <header class="op-head">
+      <p class="small muted"><a href="/operator">오퍼레이터</a></p>
+      <h1>
+        {op.name} <span class="muted appellation">{op.appellation}</span>
+        {op.needsTranslation && <span class="badge badge--fallback">zh_CN</span>}
+      </h1>
+      <p class="meta small muted">
+        {op.rarity && <span>{'★'.repeat(op.rarity)}</span>}
+        <span>{PROFESSION_LABEL[op.profession] ?? op.profession}</span>
+        {op.nationName && <span>{op.nationName}</span>}
+        {op.groupName && <span>{op.groupName}</span>}
+        {op.teamName && <span>{op.teamName}</span>}
+        {op.displayNumber && <span>{op.displayNumber}</span>}
+      </p>
+      {op.itemUsage && <p>{op.itemUsage}</p>}
+      {op.itemDesc && <p class="muted"><em>{op.itemDesc}</em></p>}
+      {Object.keys(op.cv).length > 0 && (
+        <p class="small muted">
+          CV: {Object.entries(op.cv).map(([lang, names]: any, i) => (
+            <>{i > 0 && ' · '}{CV_LABEL[lang] ?? lang} {names.join(', ')}</>
+          ))}
+        </p>
+      )}
+    </header>
+
+    <div class="tabs" role="tablist" aria-label="오퍼레이터 정보">
+      {TABS.map((t, i) => (
+        <button role="tab" id={`tab-${t.id}`} aria-controls={`panel-${t.id}`} aria-selected={i === 0 ? 'true' : 'false'} data-tab={t.id}>
+          {t.label} <span class="small">{t.count}</span>
+        </button>
+      ))}
+    </div>
+
+    <!-- 기록 -->
+    <section role="tabpanel" id="panel-records" aria-labelledby="tab-records">
+      {op.records.length === 0 && <p class="muted">기록 데이터가 없습니다.</p>}
+      {op.records.map((r: any) => (
+        <section class="record">
+          <h3>{r.title}</h3>
+          {r.entries.map((e: any) => (
+            <div class="record__entry">
+              {e.unlockString && <p class="small muted">🔒 {e.unlockString}</p>}
+              <p class="pre" set:html={richTextToHtml(e.text)} />
+            </div>
+          ))}
+        </section>
+      ))}
+    </section>
+
+    <!-- 대사 -->
+    <section role="tabpanel" id="panel-words" aria-labelledby="tab-words" hidden>
+      {op.words.length === 0 && <p class="muted">대사 데이터가 없습니다.</p>}
+      {op.words.map((set: any) => (
+        <section class="wordset">
+          {op.words.length > 1 && <h3>{set.isDefault ? '기본' : set.wordKey.replace(`${op.id}_`, '')}</h3>}
+          {set.needsTranslation && <p class="badge badge--fallback">zh_CN</p>}
+          <dl class="words">
+            {set.lines.map((w: any) => (
+              <>
+                <dt>{w.title}</dt>
+                <dd set:html={richTextToHtml(w.text)} />
+              </>
+            ))}
+          </dl>
+        </section>
+      ))}
+    </section>
+
+    <!-- 오퍼레이터 레코드 -->
+    <section role="tabpanel" id="panel-op-records" aria-labelledby="tab-op-records" hidden>
+      {op.operatorRecords.length === 0 && <p class="muted">오퍼레이터 레코드가 없습니다.</p>}
+      {op.operatorRecords.map((set: any) => (
+        <section class="record">
+          <h3>{set.name} <span class="small muted">{set.date ?? ''}</span></h3>
+          <ul class="list-plain">
+            {set.stories.map((s: any) => (
+              <li>
+                {s.available ? <a href={`/story/${s.id}`}>{s.name}</a> : <span class="muted">{s.name} (원문 없음)</span>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </section>
+
+    <!-- 등장 스토리 -->
+    <section role="tabpanel" id="panel-appearances" aria-labelledby="tab-appearances" hidden>
+      <p class="small muted">
+        스크립트의 화자 이름과 스프라이트 ID 로 자동 추출한 목록입니다. 줄 수는 해당 스토리에서의 대사 수.
+        <!-- TODO(appearances): 이름이 다른 형태(코드네임 변경, 가명)로 등장하는 경우는 overrides 로 보정 -->
+      </p>
+      {appearancesByGroup.size === 0 && <p class="muted">등장 스토리가 없습니다.</p>}
+      {[...appearancesByGroup.entries()].map(([gid, g]) => (
+        <section class="record" id={gid}>
+          <h3>{g.name} <span class="small muted">{g.date ?? ''}</span></h3>
+          <ul class="list-plain">
+            {g.items.map((a: any) => (
+              <li class="appear">
+                <a href={`/story/${a.id}`}>
+                  {a.code && <span class="code">{a.code}</span>} {a.name}
+                </a>
+                <span class="small muted">{a.avgTag ? ` · ${a.avgTag}` : ''}{a.lines ? ` · ${a.lines}줄` : ' · 등장'}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </section>
+  </article>
+</Layout>
+
+<script>
+  // 탭 전환 (프레임워크 없이). URL 해시(#words 등)로 초기 탭 선택 지원.
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+  const select = (id: string) => {
+    for (const t of tabs) {
+      const on = t.dataset.tab === id;
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      const panel = document.getElementById(`panel-${t.dataset.tab}`);
+      if (panel) panel.hidden = !on;
+    }
+  };
+  for (const t of tabs) {
+    t.addEventListener('click', () => {
+      select(t.dataset.tab!);
+      history.replaceState(null, '', `#${t.dataset.tab}`);
+    });
+  }
+  const initial = location.hash.slice(1);
+  if (tabs.some((t) => t.dataset.tab === initial)) select(initial);
+</script>
+
+<style>
+  .op-head h1 {
+    margin: 0.25rem 0 0.5rem;
+  }
+  .appellation {
+    font-weight: 400;
+    font-size: 0.7em;
+    font-family: var(--font-sans);
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.75rem;
+  }
+  .record {
+    margin-bottom: 1.5rem;
+  }
+  .record h3 {
+    margin: 0 0 0.5rem;
+    font-size: 1.05rem;
+  }
+  .record__entry + .record__entry {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px dashed var(--color-line);
+  }
+  .pre {
+    white-space: pre-line;
+    margin: 0;
+  }
+  .words {
+    display: grid;
+    grid-template-columns: minmax(6rem, 9rem) 1fr;
+    gap: 0.5rem 1rem;
+    margin: 0;
+  }
+  .words dt {
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    color: var(--color-muted);
+  }
+  .words dd {
+    margin: 0;
+  }
+  .code {
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    color: var(--color-accent);
+  }
+  @media (max-width: 480px) {
+    .words {
+      grid-template-columns: 1fr;
+      gap: 0.1rem;
+    }
+    .words dd {
+      margin-bottom: 0.75rem;
+    }
+  }
+</style>

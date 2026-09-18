@@ -1,0 +1,115 @@
+---
+/**
+ * src/layouts/Layout.astro — 공통 레이아웃 (헤더 nav + 푸터)
+ * props: title, description?
+ */
+import '../styles/global.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const SITE_NAME = 'Furnaceside Fables';
+const { title, description = '아크나이츠 스토리 · 연표 · 오퍼레이터 아카이브 (비상업적 팬 사이트)' } = Astro.props;
+const pageTitle = title ? `${title} · ${SITE_NAME}` : SITE_NAME;
+
+const NAV = [
+  { href: '/', label: '홈' },
+  { href: '/timeline', label: '연표' },
+  { href: '/story', label: '스토리' },
+  { href: '/operator', label: '오퍼레이터' },
+];
+const current = Astro.url.pathname;
+const isActive = (href: string) => (href === '/' ? current === '/' : current.startsWith(href));
+---
+
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- 한국어 본문 폰트: Noto Serif KR -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <!-- TODO(seo): astro.config.mjs 의 site 설정 후 canonical / og 태그 추가 -->
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container site-header__inner">
+        <a class="site-brand" href="/">{SITE_NAME}</a>
+        <nav aria-label="주 메뉴">
+          <ul class="list-plain site-nav">
+            {NAV.map((item) => (
+              <li>
+                <a href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>{item.label}</a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main class="site-main">
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="container small muted">
+        <p>
+          비상업적 팬 사이트. 아크나이츠(明日方舟)의 모든 텍스트·명칭의 권리는 Hypergryph / Yostar 에 있습니다.
+          게임 데이터: <a href="https://github.com/ArknightsAssets/ArknightsGamedata">ArknightsAssets/ArknightsGamedata</a>
+        </p>
+      </div>
+    </footer>
+
+    <style>
+      .site-header {
+        border-bottom: 1px solid var(--color-line);
+        background: var(--color-card);
+      }
+      .site-header__inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding-top: 0.75rem;
+        padding-bottom: 0.75rem;
+        flex-wrap: wrap;
+      }
+      .site-brand {
+        font-weight: 700;
+        color: var(--color-fg);
+        letter-spacing: 0.02em;
+      }
+      .site-nav {
+        display: flex;
+        gap: 1.25rem;
+        font-family: var(--font-sans);
+        font-size: 0.95rem;
+      }
+      .site-nav a {
+        color: var(--color-muted);
+      }
+      .site-nav a[aria-current='page'] {
+        color: var(--color-fg);
+        font-weight: 600;
+      }
+      .site-main {
+        flex: 1;
+        padding: 2rem 0 3rem;
+      }
+      .site-footer {
+        border-top: 1px solid var(--color-line);
+        padding: 1.5rem 0;
+      }
+    </style>
+  </body>
+</html>

@@ -1,0 +1,94 @@
+---
+/**
+ * / — 홈: 연표 미리보기 + 빠른 이동
+ */
+import Layout from '../layouts/Layout.astro';
+import { loadTimeline, loadMeta, loadStories, loadOperators, KIND_LABEL } from '../lib/data.mjs';
+
+const timeline = loadTimeline();
+const meta = loadMeta();
+const { stories } = loadStories();
+const operators = loadOperators();
+
+// 최근 공개된 스토리 그룹 8개 (연표는 오래된 순이므로 뒤에서부터)
+const recent = [...timeline].reverse().slice(0, 8);
+---
+
+<Layout>
+  <div class="container">
+    <section class="hero">
+      <h1>Furnaceside Fables</h1>
+      <p class="muted">
+        아크나이츠 스토리를 시간순으로 읽고, 오퍼레이터별 기록과 등장 스토리를 찾아보는 아카이브.
+        <!-- TODO(home): 소개 문구 / 대표 이미지 -->
+      </p>
+    </section>
+
+    <section class="quick">
+      <a class="card quick__item" href="/timeline">
+        <strong>연표</strong>
+        <span class="muted small">{timeline.length}개 이벤트 · 시간순</span>
+      </a>
+      <a class="card quick__item" href="/story">
+        <strong>스토리</strong>
+        <span class="muted small">{stories.filter((s) => s.available).length}편</span>
+      </a>
+      <a class="card quick__item" href="/operator">
+        <strong>오퍼레이터</strong>
+        <span class="muted small">{operators.length}명</span>
+      </a>
+    </section>
+
+    <section>
+      <h2>최근 공개</h2>
+      <ol class="list-plain preview">
+        {recent.map((g) => (
+          <li class="preview__item">
+            <span class="preview__date muted small">{g.date}</span>
+            <span class="badge">{KIND_LABEL[g.kind]}</span>
+            <a href={`/timeline#${g.id}`}>{g.name}</a>
+            {g.needsTranslation && <span class="badge badge--fallback">zh_CN</span>}
+            <span class="muted small">{g.stories.length}편</span>
+          </li>
+        ))}
+      </ol>
+      <p><a href="/timeline">전체 연표 보기 →</a></p>
+    </section>
+
+    <p class="small muted">
+      데이터 버전: ko_KR {meta.versions.ko_KR ?? '-'} · zh_CN {meta.versions.zh_CN ?? '-'} · 생성 {meta.generatedAt.slice(0, 10)}
+    </p>
+  </div>
+</Layout>
+
+<style>
+  .hero {
+    margin-bottom: 2rem;
+  }
+  .hero h1 {
+    margin: 0 0 0.5rem;
+  }
+  .quick {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+  }
+  .quick__item {
+    display: flex;
+    flex-direction: column;
+    color: inherit;
+  }
+  .preview__item {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--color-line);
+  }
+  .preview__date {
+    font-family: var(--font-sans);
+    min-width: 6.5rem;
+  }
+</style>
