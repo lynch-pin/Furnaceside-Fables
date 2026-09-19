@@ -502,6 +502,9 @@ function resolveGroupYear(g) {
   return { loreYear: null, loreSource: null, evidence };
 }
 
+// 그룹에도 콜라보 표시를 달아 /story 목록에서 쓴다
+for (const g of groups) g.collab = overrides[g.id]?.collab ?? null;
+
 const timeline = groups
   .filter((g) => g.kind !== 'record')
   .map((g) => {
@@ -513,6 +516,8 @@ const timeline = groups
       kind: g.kind,
       chapter: g.chapter,
       image: g.image,
+      // 콜라보 작품명 (overrides 에서 지정). 연도가 없으면 연표의 '콜라보' 구역에 묶인다.
+      collab: gov.collab ?? null,
       // 세계관 연도
       loreYear,
       loreLabel: gov.loreLabel ?? (loreYear ? `${loreYear}년` : null),

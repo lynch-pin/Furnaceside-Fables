@@ -36,6 +36,8 @@
   --color-card: #f7f6ef;
   --color-badge-bg: #dfe6f2;
   --color-badge-fg: #34486f;
+  --color-collab-bg: #ece3f7;
+  --color-collab-fg: #5b3f8c;
 
   --measure: 42rem;      /* 본문 최대 폭 */
   --measure-wide: 64rem; /* 목록/연표 최대 폭 */
@@ -55,6 +57,8 @@
     --color-card: var(--jb-bg-alt);
     --color-badge-bg: #2a3040;
     --color-badge-fg: var(--jb-sky);
+    --color-collab-bg: #332b44;
+    --color-collab-fg: var(--jb-purple);
     color-scheme: dark;
   }
 }
@@ -69,6 +73,8 @@
   --color-card: var(--jb-bg-alt);
   --color-badge-bg: #2a3040;
   --color-badge-fg: var(--jb-sky);
+  --color-collab-bg: #332b44;
+  --color-collab-fg: var(--jb-purple);
   color-scheme: dark;
 }
 
@@ -140,6 +146,10 @@ h3 {
 .badge--fallback {
   background: var(--color-badge-bg);
   color: var(--color-badge-fg);
+}
+.badge--collab {
+  background: var(--color-collab-bg);
+  color: var(--color-collab-fg);
 }
 
 /* 썸네일 */

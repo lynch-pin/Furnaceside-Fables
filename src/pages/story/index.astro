@@ -47,6 +47,7 @@ const sections = ORDER.map((kind) => ({
                   <span class="group__name">
                     {g.chapter && <span class="badge">{g.chapter.label}</span>}
                     {g.name}
+                    {g.collab && <span class="badge badge--collab">콜라보 · {g.collab}</span>}
                     <SourceBadge locale={g.sourceLocale} translated={g.translated} />
                   </span>
                   <span class="muted small">{g.date ?? ''} · {g.storyIds.length}편</span>

@@ -24,23 +24,29 @@ const SOURCE_LABEL: Record<string, string> = {
   'text-weak': '본문 날짜 (1편, 검수 필요)',
 };
 
+// 구역: 연도(오름차순) → 콜라보(테라 연대 밖) → 연대 미상
+const COLLAB = '콜라보';
 const UNKNOWN = '연대 미상';
-const byYear = new Map<string, typeof timeline>();
+const buckets = new Map<string, typeof timeline>();
 for (const t of timeline) {
-  const key = t.loreYear ? String(t.loreYear) : UNKNOWN;
-  if (!byYear.has(key)) byYear.set(key, []);
-  byYear.get(key)!.push(t);
+  const key = t.loreYear ? String(t.loreYear) : t.collab ? COLLAB : UNKNOWN;
+  if (!buckets.has(key)) buckets.set(key, []);
+  buckets.get(key)!.push(t);
 }
-const anchor = (key: string) => (key === UNKNOWN ? 'y-unknown' : `y-${key}`);
-const heading = (key: string) => (key === UNKNOWN ? UNKNOWN : `${key}년`);
+const rank = (k: string) => (k === UNKNOWN ? 2 : k === COLLAB ? 1 : 0);
+const byYear = new Map(
+  [...buckets.entries()].sort(([a], [b]) => rank(a) - rank(b) || Number(a) - Number(b)),
+);
+const anchor = (key: string) => (key === UNKNOWN ? 'y-unknown' : key === COLLAB ? 'y-collab' : `y-${key}`);
+const heading = (key: string) => (key === UNKNOWN || key === COLLAB ? key : `${key}년`);
 ---
 
 <Layout title="연표">
   <div class="container">
     <h1>연표</h1>
     <p class="muted small">
-      테라 력 기준, 이벤트 단위. 항목을 누르면 스토리 목록과 줄거리가 펼쳐집니다. 회상이 섞인 이벤트는 주된 시기에 배치했고,
-      연도가 확인되지 않은 이벤트는 맨 아래 "연대 미상"에 출시 순으로 있습니다.
+      테라 력 기준, 이벤트 단위. 항목을 누르면 스토리 목록과 줄거리가 펼쳐집니다. 회상이 섞인 이벤트는 주된 시기에 배치했습니다.
+      다른 작품과의 콜라보는 "콜라보" 구역에, 연도가 확인되지 않은 이벤트는 "연대 미상"에 출시 순으로 있습니다.
     </p>
 
     <nav class="shortcuts" aria-label="연도">
@@ -67,6 +73,7 @@ const heading = (key: string) => (key === UNKNOWN ? UNKNOWN : `${key}년`);
                     <span class="event__title">
                       <span class="badge">{t.chapter?.label ?? KIND_LABEL[t.kind]}</span>
                       <strong>{t.name}</strong>
+                      {t.collab && <span class="badge badge--collab">콜라보 · {t.collab}</span>}
                       <SourceBadge locale={t.sourceLocale} translated={t.translated} />
                     </span>
                     <span class="event__meta small muted">
