@@ -2,7 +2,8 @@
 /**
  * /operator/[id] — 오퍼레이터 개별 페이지.
  * 초상화: 정예 1 / 정예 2 전환 (있는 것만)
- * 탭: 기록(handbook) / 대사(charword) / 오퍼레이터 레코드(handbookAvgList) / 등장 스토리(파서 추출)
+ * 탭: 기록(handbook + 증표 + 패러독스 시뮬레이션) / 대사(charword) / 오퍼레이터 레코드(handbookAvgList)
+ *     / 모듈(uniequip 모듈 스토리) / 등장 스토리(파서 추출)
  */
 import Layout from '../../layouts/Layout.astro';
 import SourceBadge from '../../components/SourceBadge.astro';
@@ -15,12 +16,25 @@ export async function getStaticPaths() {
 
 const { op } = Astro.props;
 
+// 기록 탭에는 핸드북 기록 + 증표 + 패러독스 시뮬레이션을 함께 둔다
+const extraRecords = [op.token, op.tokenKernel, op.paradox].filter(Boolean).length;
 const TABS = [
-  { id: 'records', label: '기록', count: op.records.length },
+  { id: 'records', label: '기록', count: op.records.length + extraRecords },
   { id: 'words', label: '대사', count: op.words.reduce((n: number, w: any) => n + w.lines.length, 0) },
   { id: 'op-records', label: '오퍼레이터 레코드', count: op.operatorRecords.length },
+  { id: 'modules', label: '모듈', count: op.modules.length },
   { id: 'appearances', label: '등장 스토리', count: op.appearances.length },
 ];
+
+const UNLOCK_LABEL: Record<string, string> = { AWAKE: '정예화', FAVOR: '신뢰도', LEVEL: '레벨' };
+const unlockText = (list: any[]) =>
+  (list ?? [])
+    .map((u) => {
+      if (u.unlockType === 'AWAKE') return `정예화 ${u.unlockParam1}단계 Lv.${u.unlockParam2}`;
+      if (u.unlockType === 'FAVOR') return `신뢰도 ${u.unlockParam1}`;
+      return `${UNLOCK_LABEL[u.unlockType] ?? u.unlockType} ${u.unlockParam1 ?? ''}`.trim();
+    })
+    .join(' · ');
 
 // 등장 스토리를 그룹(이벤트) 단위로 묶기
 const appearancesByGroup = new Map<string, { name: string; date: string | null; items: any[] }>();
@@ -103,6 +117,28 @@ const CV_LABEL: Record<string, string> = { KR: '한국어', JP: '일본어', CN_
           ))}
         </section>
       ))}
+
+      {[op.token, op.tokenKernel].filter(Boolean).map((t: any) => (
+        <section class="record">
+          <h3>
+            {t.name}
+            <SourceBadge locale={t.needsTranslation ? t.sourceLocale : null} translated={false} />
+          </h3>
+          {t.description && <p class="pre quote" set:html={richTextToHtml(t.description)} />}
+          <p class="small muted">{[t.usage, t.obtain].filter(Boolean).join(' · ')}</p>
+        </section>
+      ))}
+
+      {op.paradox && (
+        <section class="record">
+          <h3>
+            패러독스 시뮬레이션 <span class="muted">— {op.paradox.name}</span>
+            <SourceBadge locale={op.paradox.needsTranslation ? op.paradox.sourceLocale : null} translated={false} />
+          </h3>
+          {op.paradox.unlock?.length > 0 && <p class="small muted">🔒 {unlockText(op.paradox.unlock)}</p>}
+          {op.paradox.description && <p class="pre" set:html={richTextToHtml(op.paradox.description)} />}
+        </section>
+      )}
     </section>
 
     <!-- 대사 -->
@@ -137,6 +173,21 @@ const CV_LABEL: Record<string, string> = { KR: '한국어', JP: '일본어', CN_
               </li>
             ))}
           </ul>
+        </section>
+      ))}
+    </section>
+
+    <!-- 모듈 -->
+    <section role="tabpanel" id="panel-modules" aria-labelledby="tab-modules" hidden>
+      {op.modules.length === 0 && <p class="muted">모듈이 없습니다.</p>}
+      {op.modules.map((m: any) => (
+        <section class="record">
+          <h3>
+            <span class="module-type">{m.typeName}</span> {m.name}
+            <SourceBadge locale={m.needsTranslation ? m.sourceLocale : null} translated={false} />
+          </h3>
+          {m.unlockLevel && <p class="small muted">🔒 정예화 2단계 Lv.{m.unlockLevel}</p>}
+          {m.story && <p class="pre" set:html={richTextToHtml(m.story)} />}
         </section>
       ))}
     </section>
@@ -285,6 +336,20 @@ const CV_LABEL: Record<string, string> = { KR: '한국어', JP: '일본어', CN_
     font-family: var(--font-sans);
     font-size: 0.8rem;
     color: var(--color-accent);
+  }
+  .quote {
+    border-left: 3px solid var(--color-line);
+    padding-left: 0.8rem;
+    font-style: italic;
+  }
+  .module-type {
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    color: var(--color-accent);
+    border: 1px solid var(--color-accent);
+    border-radius: 3px;
+    padding: 0.05em 0.4em;
+    margin-right: 0.2rem;
   }
   @media (max-width: 480px) {
     .words {

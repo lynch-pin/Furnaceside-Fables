@@ -92,6 +92,8 @@ const charword = loadExcelAll('charword_table', { required: false });
 const handbook = loadExcelAll('handbook_info_table', { required: false });
 const handbookTeam = loadExcelAll('handbook_team_table', { required: false });
 const zone = loadExcelAll('zone_table', { required: false });
+const itemTable = loadExcelAll('item_table', { required: false });
+const uniequip = loadExcelAll('uniequip_table', { required: false });
 const storyReviewMeta = loadExcelAll('story_review_meta_table', { required: false });
 
 /** 모든 로케일에 걸친 키 합집합 (ko 순서 우선) */
@@ -657,6 +659,67 @@ for (const [id, op] of operators) {
   if (vl?.dict) {
     for (const [lang, v] of Object.entries(vl.dict)) op.cv[lang] = v.cvName ?? [];
   }
+
+  // 5-b2. 증표 (잠재능력 아이템) / 커널 증표
+  const tokenOf = (itemId, trKey) => {
+    const picked = pick(byLocale(itemTable, 'items', itemId));
+    const v = picked.value;
+    if (!v) return null;
+    const tr = trOp?.[trKey];
+    return {
+      id: itemId,
+      name: tr?.name ?? v.name,
+      description: tr?.description ?? v.description ?? null,
+      usage: tr?.usage ?? v.usage ?? null,
+      obtain: tr?.obtain ?? v.obtainApproach ?? null,
+      sourceLocale: picked.locale,
+      needsTranslation: picked.needsTranslation && !tr,
+    };
+  };
+  op.token = tokenOf(`p_${id}`, 'token');
+  op.tokenKernel = tokenOf(`class_p_${id}`, 'tokenKernel');
+
+  // 5-b3. 패러독스 시뮬레이션 (handbookStageData)
+  const paradoxPick = pick(byLocale(handbook, 'handbookStageData', id));
+  if (paradoxPick.value) {
+    const v = paradoxPick.value;
+    const tr = trOp?.paradox;
+    op.paradox = {
+      stageId: v.stageId,
+      code: v.code ?? null,
+      name: tr?.name ?? v.name,
+      description: tr?.description ?? v.description ?? null,
+      unlock: v.unlockParam ?? [],
+      sourceLocale: paradoxPick.locale,
+      needsTranslation: paradoxPick.needsTranslation && !tr,
+    };
+  } else {
+    op.paradox = null;
+  }
+
+  // 5-b4. 모듈 (uniequip). 기본 장비(INITIAL)는 특성 설명이므로 제외하고 모듈 스토리가 있는 것만.
+  const equipIds = pick(byLocale(uniequip, 'charEquip', id)).value ?? [];
+  op.modules = equipIds
+    .map((eid, i) => {
+      const picked = pick(byLocale(uniequip, 'equipDict', eid));
+      const v = picked.value;
+      if (!v || v.type === 'INITIAL') return null;
+      const tr = trOp?.modules?.find((m) => m.id === eid);
+      return {
+        id: eid,
+        name: tr?.name ?? v.uniEquipName,
+        typeName: [v.typeName1, v.typeName2].filter(Boolean).join('-'),
+        // 모듈 스토리 (uniEquipDesc)
+        story: tr?.story ?? v.uniEquipDesc ?? null,
+        unlockLevel: v.unlockLevel ?? null,
+        phase: v.unlockEvolvePhase ?? null,
+        order: v.charEquipOrder ?? i,
+        sourceLocale: picked.locale,
+        needsTranslation: picked.needsTranslation && !tr,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.order - b.order);
 
   // 5-c. 등장 스토리 (연표 순)
   op.appearances = [...(appearanceIndex.get(id) ?? [])]

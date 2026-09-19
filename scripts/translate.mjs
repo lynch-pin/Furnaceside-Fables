@@ -94,6 +94,10 @@ if (flag('--export-meta')) {
       records: o.records.map((r) => ({ title: r.title, entries: r.entries.map((e) => ({ text: e.text, unlockString: e.unlockString })) })),
       operatorRecords: o.operatorRecords.map((r) => ({ setId: r.setId, name: r.name, stories: r.stories.map((x) => ({ id: x.id, name: x.name })) })),
       words: o.words.map((w) => ({ wordKey: w.wordKey, lines: w.lines.map((l) => ({ id: l.id, title: l.title, text: l.text })) })),
+      token: o.token ? { name: o.token.name, description: o.token.description, usage: o.token.usage, obtain: o.token.obtain } : undefined,
+      tokenKernel: o.tokenKernel ? { name: o.tokenKernel.name, description: o.tokenKernel.description, usage: o.tokenKernel.usage, obtain: o.tokenKernel.obtain } : undefined,
+      paradox: o.paradox ? { name: o.paradox.name, description: o.paradox.description } : undefined,
+      modules: o.modules.map((m) => ({ id: m.id, name: m.name, story: m.story })),
     };
     fs.writeFileSync(path.join(TODO, `op.${o.id}.src.json`), JSON.stringify(src, null, 1));
     nOps++;
