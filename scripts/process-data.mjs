@@ -134,7 +134,7 @@ for (const id of unionKeys(character)) {
 
   const trOp = loadTranslation(`operators/${id}`); // CN 전용 오퍼레이터 번역본 (ko_KR 데이터가 있으면 무시됨)
   const name = withTranslation(text(character, id, 'name'), trOp?.name);
-  if (trOp && !name.needsTranslation) staleTranslations.push(`operators/${id}`);
+  if (trOp?.name && !name.needsTranslation) staleTranslations.push(`operators/${id}`);
   // 초상화: 기본(_1) / 정예 1 변경(_1+) / 정예 2(_2). 있는 것만.
   // TODO(portrait): 스킨 일러스트는 skin_table.json 의 portraitId 로 같은 방식으로 붙일 수 있다 (검토 중).
   const portraits = [
@@ -588,7 +588,8 @@ log('오퍼레이터 상세…');
 for (const [id, op] of operators) {
   const hbPick = pick(byLocale(handbook, 'handbookDict', id));
   const hb = hbPick.value;
-  const trOp = op.translated ? loadTranslation(`operators/${id}`) : null;
+  // 번역 캐시는 항상 읽는다. CN 서버에만 있는 모듈·증표·패러독스는 KR 오퍼레이터에게도 있을 수 있다.
+  const trOp = loadTranslation(`operators/${id}`);
   if (hb) {
     op.records = (hb.storyTextAudio ?? []).map((sec, si) => ({
       title: trOp?.records?.[si]?.title ?? sec.storyTitle,

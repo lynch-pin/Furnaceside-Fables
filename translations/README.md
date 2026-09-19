@@ -6,7 +6,8 @@ KR 서버에 실장되면 KR 데이터가 자동으로 우선 적용되고, `npm
 ```
 translations/zh_CN/
   meta.json               이벤트/스토리 이름·태그·줄거리   { groups: {id:{name}}, stories: {id:{name, avgTag, summary}} }
-  operators/<charId>.json CN 전용 오퍼레이터 전체 텍스트 (이름, 프로필, 기록, 대사)
+  operators/<charId>.json CN 전용 오퍼레이터 텍스트 (이름, 프로필, 기록, 대사, 증표, 패러독스 시뮬레이션, 모듈)
+                          — 한국 서버 오퍼레이터라도 CN 서버에만 있는 항목(커널 증표·패러독스·모듈)이 있으면 그 키만 담긴 부분 파일이 된다
   stories-src/<id>.json   스토리 본문 원문 (npm run translate -- --export 로 생성, 번역 입력용)
   stories/<id>.json       스토리 본문 번역 결과  { "source": "zh_CN", "lines": [...] }
 ```
@@ -19,6 +20,7 @@ translations/zh_CN/
 1. `npm run sync && npm run process`
 2. `npm run translate -- --export-meta` → `translations/zh_CN/todo/` 에 번역 필요 항목만 생성
 3. 번역 (Claude 세션 등): `meta.src.json` → 값만 번역해 `translations/zh_CN/meta.json` 에 병합, `op.<id>.src.json` → 구조 그대로 `operators/<id>.json`
+   (오퍼레이터 배열 형태로 번역했다면 `npm run translate -- --merge <파일>` 로 병합 가능. 기존 파일의 다른 키는 보존된다.)
 4. `npm run process` 로 확인 후 커밋 → 다음 배포에 반영
 
 이 갱신은 자동화되어 있지 않다. GitHub Actions 는 게임 데이터 동기화·빌드·배포만 자동으로 수행하며, 번역과 연표 확정(overrides)은 사람이 커밋해야 한다.

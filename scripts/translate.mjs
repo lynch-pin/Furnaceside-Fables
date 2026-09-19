@@ -10,6 +10,7 @@
  *   npm run translate -- --export    # API 없이: 번역 원문을 translations/zh_CN/stories-src/<storyId>.json 로 내보내기
  *                                    #   → 다른 도구/세션에서 번역한 뒤 같은 파일명으로 translations/zh_CN/stories/ 에 저장
  *   npm run translate -- --check     # 캐시 검증 (줄 수 일치, 중국어 잔존 여부)
+ *   npm run translate -- --merge <file.json>  # 번역 결과(오퍼레이터 배열)를 translations/zh_CN/operators/ 에 병합
  *   npm run translate -- --export-meta  # 번역본이 없는 CN 전용 이벤트/스토리 이름·줄거리와 오퍼레이터 텍스트를
  *                                       #   translations/zh_CN/todo/ 에 내보내기 (현재 운영 범위: 본문 제외, 이 수준까지만 번역)
  *                                       #   → 번역 후 meta.json 에 병합 / operators/<id>.json 으로 저장
@@ -69,6 +70,40 @@ const textLines = (s) => {
   return parseStory(raw.text).filter((l) => typeof l.text === 'string' && l.text.length > 0);
 };
 const linesOf = (s) => textLines(s)?.map((l) => l.text) ?? null;
+
+if (flag('--merge')) {
+  // 번역 결과 병합: [{ id, operator?, token?, tokenKernel?, paradox?, modules?[{id,...}] , ... }]
+  //   기존 translations/zh_CN/operators/<id>.json 이 있으면 키 단위로 덮어쓰고, 없으면 새로 만든다.
+  //   modules 는 id 기준으로 항목을 합친다. operator(참고용 이름)는 저장하지 않는다.
+  const file = opt('--merge');
+  if (!file) {
+    console.error('[translate] --merge <file.json> 로 파일을 지정하세요.');
+    process.exit(1);
+  }
+  const OPS = path.join(translationsRoot('zh_CN'), 'operators');
+  fs.mkdirSync(OPS, { recursive: true });
+  const input = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const list = Array.isArray(input) ? input : [input];
+  let created = 0;
+  let updated = 0;
+  for (const entry of list) {
+    const { id, operator, modules, ...rest } = entry;
+    if (!id) continue;
+    const target = path.join(OPS, `${id}.json`);
+    const exists = fs.existsSync(target);
+    const cur = exists ? JSON.parse(fs.readFileSync(target, 'utf8')) : { id };
+    Object.assign(cur, rest);
+    if (modules?.length) {
+      const byId = new Map((cur.modules ?? []).map((m) => [m.id, m]));
+      for (const m of modules) byId.set(m.id, { ...(byId.get(m.id) ?? {}), ...m });
+      cur.modules = [...byId.values()];
+    }
+    fs.writeFileSync(target, JSON.stringify(cur, null, 1));
+    exists ? updated++ : created++;
+  }
+  console.log(`[translate] 병합 완료: 신규 ${created}개, 갱신 ${updated}개 → ${path.relative(ROOT, OPS)}/`);
+  process.exit(0);
+}
 
 if (flag('--export-meta')) {
   // 운영 방침: 스토리 본문은 번역하지 않고, 이벤트/스토리 이름·태그·줄거리와 CN 전용 오퍼레이터 텍스트까지만 번역한다.
