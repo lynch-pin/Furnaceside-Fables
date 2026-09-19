@@ -63,6 +63,19 @@ export function operatorAvatar(charId) {
   return assetUrl(`arts/charavatars/${charId}.png`);
 }
 
+/**
+ * 오퍼레이터 초상화 (반신). portraitId 예: char_002_amiya_1(기본), _2(정예 2), _1+(정예 1 변경), 스킨은 `#` 포함.
+ * 인덱스에 없으면 null.
+ */
+export function operatorPortrait(portraitId) {
+  if (!portraitId) return null;
+  const idx = loadAvatarIndex();
+  const rel = `portrait/${portraitId}.png`;
+  if (idx !== false && !idx.has(rel)) return null;
+  // '#' 은 URL 프래그먼트로 해석되므로 인코딩
+  return `${AVATAR_BASE}/${rel.replace(/#/g, '%23')}`;
+}
+
 /** 메인 스토리 챕터 배너 (main_0 … main_14) */
 export const chapterBanner = (zoneId) => assetUrl(`arts/ui/homebanners/zone/${zoneId}.png`);
 

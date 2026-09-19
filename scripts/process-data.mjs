@@ -30,7 +30,7 @@ import {
 } from '../src/lib/i18n.mjs';
 import { parseStoryWithMeta, spriteToCharKey, stripRichText } from '../src/lib/story-parser.mjs';
 import { loadTranslation } from '../src/lib/i18n.mjs';
-import { operatorAvatar, chapterBanner, storyEntryPic, storyMainPic, avgBackground, avgImage } from '../src/lib/assets.mjs';
+import { operatorAvatar, operatorPortrait, chapterBanner, storyEntryPic, storyMainPic, avgBackground, avgImage } from '../src/lib/assets.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
@@ -133,10 +133,19 @@ for (const id of unionKeys(character)) {
   const trOp = loadTranslation(`operators/${id}`); // CN 전용 오퍼레이터 번역본 (ko_KR 데이터가 있으면 무시됨)
   const name = withTranslation(text(character, id, 'name'), trOp?.name);
   if (trOp && !name.needsTranslation) staleTranslations.push(`operators/${id}`);
+  // 초상화: 기본(_1) / 정예 1 변경(_1+) / 정예 2(_2). 있는 것만.
+  // TODO(portrait): 스킨 일러스트는 skin_table.json 의 portraitId 로 같은 방식으로 붙일 수 있다 (검토 중).
+  const portraits = [
+    { key: 'e1', label: '정예 1', url: operatorPortrait(`${id}_1`) },
+    { key: 'e1plus', label: '정예 1+', url: operatorPortrait(`${id}_1+`) },
+    { key: 'e2', label: '정예 2', url: operatorPortrait(`${id}_2`) },
+  ].filter((p) => p.url);
+
   const op = {
     id,
     name: name.text,
     avatar: operatorAvatar(id),
+    portraits,
     appellation: c.appellation ?? '',
     displayNumber: c.displayNumber ?? null,
     rarity: RARITY[c.rarity] ?? null,

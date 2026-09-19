@@ -1,6 +1,7 @@
 ---
 /**
  * /operator/[id] — 오퍼레이터 개별 페이지.
+ * 초상화: 정예 1 / 정예 2 전환 (있는 것만)
  * 탭: 기록(handbook) / 대사(charword) / 오퍼레이터 레코드(handbookAvgList) / 등장 스토리(파서 추출)
  */
 import Layout from '../../layouts/Layout.astro';
@@ -36,7 +37,26 @@ const CV_LABEL: Record<string, string> = { KR: '한국어', JP: '일본어', CN_
     <header class="op-head">
       <p class="small muted"><a href="/operator">오퍼레이터</a></p>
       <div class="op-head__row">
-        {op.avatar && <img class="avatar op-head__avatar" src={op.avatar} alt="" decoding="async" />}
+        {op.portraits.length > 0 ? (
+          <div class="portrait">
+            <img
+              class="portrait__img"
+              id="portrait-img"
+              src={op.portraits[0].url}
+              alt={`${op.name} 초상화`}
+              decoding="async"
+            />
+            {op.portraits.length > 1 && (
+              <div class="shortcuts portrait__tabs" role="group" aria-label="초상화">
+                {op.portraits.map((p: any, i: number) => (
+                  <button type="button" data-portrait={p.url} aria-pressed={i === 0 ? 'true' : 'false'}>{p.label}</button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          op.avatar && <img class="avatar op-head__avatar" src={op.avatar} alt="" decoding="async" />
+        )}
         <h1>
           {op.name} <span class="muted appellation">{op.appellation}</span>
           <SourceBadge locale={op.sourceLocale} translated={op.translated} />
@@ -148,6 +168,17 @@ const CV_LABEL: Record<string, string> = { KR: '한국어', JP: '일본어', CN_
 </Layout>
 
 <script>
+  // 초상화 전환 (정예 1 / 정예 2). 이미지는 클릭할 때 처음 불러온다.
+  const portraitImg = document.getElementById('portrait-img') as HTMLImageElement | null;
+  const portraitTabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-portrait]'));
+  for (const b of portraitTabs) {
+    b.addEventListener('click', () => {
+      if (!portraitImg) return;
+      portraitImg.src = b.dataset.portrait!;
+      for (const o of portraitTabs) o.setAttribute('aria-pressed', String(o === b));
+    });
+  }
+
   // 탭 전환 (프레임워크 없이). URL 해시(#words 등)로 초기 탭 선택 지원.
   const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
   const select = (id: string) => {
@@ -180,6 +211,35 @@ const CV_LABEL: Record<string, string> = { KR: '한국어', JP: '일본어', CN_
   .op-head__avatar {
     width: 72px;
     height: 72px;
+  }
+  .portrait {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    flex-shrink: 0;
+  }
+  .portrait__img {
+    width: 9rem;
+    aspect-ratio: 180 / 360;
+    object-fit: cover;
+    object-position: top center;
+    border-radius: var(--radius);
+    border: 1px solid var(--color-line);
+    background: var(--color-card);
+  }
+  .portrait__tabs {
+    margin: 0;
+    gap: 0.25rem;
+    font-size: 0.8rem;
+  }
+  .portrait__tabs button {
+    padding: 0.2rem 0.5rem;
+  }
+  @media (max-width: 480px) {
+    .op-head__row {
+      flex-direction: column;
+      align-items: flex-start;
+    }
   }
   .appellation {
     font-weight: 400;
