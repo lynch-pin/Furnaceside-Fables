@@ -17,7 +17,7 @@ export async function getStaticPaths() {
 const { op } = Astro.props;
 
 // 기록 탭에는 핸드북 기록 + 증표 + 패러독스 시뮬레이션을 함께 둔다
-const extraRecords = [op.token, op.tokenKernel, op.paradox].filter(Boolean).length;
+const extraRecords = [op.token, op.paradox].filter(Boolean).length;
 const TABS = [
   { id: 'records', label: '기록', count: op.records.length + extraRecords },
   { id: 'words', label: '대사', count: op.words.reduce((n: number, w: any) => n + w.lines.length, 0) },
@@ -118,7 +118,7 @@ const CV_LABEL: Record<string, string> = { KR: '한국어', JP: '일본어', CN_
         </section>
       ))}
 
-      {[op.token, op.tokenKernel].filter(Boolean).map((t: any) => (
+      {[op.token].filter(Boolean).map((t: any) => (
         <section class="record">
           <h3>
             {t.name}

@@ -591,29 +591,31 @@ for (const [id, op] of operators) {
   // 번역 캐시는 항상 읽는다. CN 서버에만 있는 모듈·증표·패러독스는 KR 오퍼레이터에게도 있을 수 있다.
   const trOp = loadTranslation(`operators/${id}`);
   if (hb) {
+    const trRecords = hbPick.needsTranslation ? trOp?.records : null;
     op.records = (hb.storyTextAudio ?? []).map((sec, si) => ({
-      title: trOp?.records?.[si]?.title ?? sec.storyTitle,
+      title: trRecords?.[si]?.title ?? sec.storyTitle,
       // 승급/신뢰도 조건별로 여러 story 가 있을 수 있음 (patchIdList 는 형태 변경 캐릭터용)
       entries: (sec.stories ?? []).map((st, ei) => ({
-        text: trOp?.records?.[si]?.entries?.[ei]?.text ?? st.storyText,
+        text: trRecords?.[si]?.entries?.[ei]?.text ?? st.storyText,
         unlock: st.unLockType,
         unlockParam: st.unLockParam ?? null,
-        unlockString: trOp?.records?.[si]?.entries?.[ei]?.unlockString ?? (st.unLockString || null),
+        unlockString: trRecords?.[si]?.entries?.[ei]?.unlockString ?? (st.unLockString || null),
       })),
       locale: hbPick.locale,
-      translated: Boolean(trOp?.records?.[si]),
+      translated: Boolean(trRecords?.[si]),
     }));
+    const trOpRecords = hbPick.needsTranslation ? trOp?.operatorRecords : null;
     const avgList = Array.isArray(hb.handbookAvgList) ? hb.handbookAvgList : Object.values(hb.handbookAvgList ?? {});
     op.operatorRecords = avgList
       .sort((a, b) => (a.sortId ?? 0) - (b.sortId ?? 0))
       .map((set, si) => ({
         setId: set.storySetId,
-        name: trOp?.operatorRecords?.[si]?.name ?? set.storySetName,
+        name: trOpRecords?.[si]?.name ?? set.storySetName,
         date: toKstDate(set.storyGetTime),
         unlock: set.unlockParam ?? [],
         stories: (set.avgList ?? []).map((a, ai) => ({
           id: a.storyId,
-          name: trOp?.operatorRecords?.[si]?.stories?.[ai]?.name ?? a.storyIntro,
+          name: trOpRecords?.[si]?.stories?.[ai]?.name ?? a.storyIntro,
           txt: a.storyTxt,
           available: storyIndex.get(a.storyId)?.available ?? false,
         })),
@@ -643,7 +645,7 @@ for (const [id, op] of operators) {
       });
     }
     op.words = [...sets.entries()].map(([wordKey, lines]) => {
-      const trSet = trOp?.words?.find((w) => w.wordKey === wordKey);
+      const trSet = wp.needsTranslation ? trOp?.words?.find((w) => w.wordKey === wordKey) : null;
       const trById = new Map((trSet?.lines ?? []).map((l) => [l.id, l]));
       return {
         wordKey,
@@ -661,12 +663,13 @@ for (const [id, op] of operators) {
     for (const [lang, v] of Object.entries(vl.dict)) op.cv[lang] = v.cvName ?? [];
   }
 
-  // 5-b2. 증표 (잠재능력 아이템) / 커널 증표
+  // 5-b2. 증표 (잠재능력 아이템). 커널 증표(class_p_char_*)는 내용이 증표와 같아 표시하지 않는다.
   const tokenOf = (itemId, trKey) => {
     const picked = pick(byLocale(itemTable, 'items', itemId));
     const v = picked.value;
     if (!v) return null;
-    const tr = trOp?.[trKey];
+    // KR 공식 텍스트가 있으면 번역 캐시를 쓰지 않는다
+    const tr = picked.needsTranslation ? trOp?.[trKey] : null;
     return {
       id: itemId,
       name: tr?.name ?? v.name,
@@ -677,14 +680,13 @@ for (const [id, op] of operators) {
       needsTranslation: picked.needsTranslation && !tr,
     };
   };
-  op.token = tokenOf(`p_${id}`, 'token');
-  op.tokenKernel = tokenOf(`class_p_${id}`, 'tokenKernel');
+  op.token = tokenOf(`p_${id}`, 'token') ?? tokenOf(`class_p_${id}`, 'token');
 
   // 5-b3. 패러독스 시뮬레이션 (handbookStageData)
   const paradoxPick = pick(byLocale(handbook, 'handbookStageData', id));
   if (paradoxPick.value) {
     const v = paradoxPick.value;
-    const tr = trOp?.paradox;
+    const tr = paradoxPick.needsTranslation ? trOp?.paradox : null;
     op.paradox = {
       stageId: v.stageId,
       code: v.code ?? null,
@@ -705,7 +707,7 @@ for (const [id, op] of operators) {
       const picked = pick(byLocale(uniequip, 'equipDict', eid));
       const v = picked.value;
       if (!v || v.type === 'INITIAL') return null;
-      const tr = trOp?.modules?.find((m) => m.id === eid);
+      const tr = picked.needsTranslation ? trOp?.modules?.find((m) => m.id === eid) : null;
       return {
         id: eid,
         name: tr?.name ?? v.uniEquipName,
