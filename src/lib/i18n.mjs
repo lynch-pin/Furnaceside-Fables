@@ -233,6 +233,15 @@ export function translationsRoot(locale = 'zh_CN') {
 }
 
 const trCache = new Map();
+
+let speakerMapCache;
+/** src/data/speakers.json (process-data 가 만든 중국어 → 한국어 화자 이름 대응표) */
+function loadSpeakerMap() {
+  if (speakerMapCache !== undefined) return speakerMapCache;
+  const file = path.join(PROJECT_ROOT, 'src', 'data', 'speakers.json');
+  speakerMapCache = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null;
+  return speakerMapCache;
+}
 /** translations/<locale>/<rel>.json 을 읽는다. 없으면 null. */
 export function loadTranslation(rel, locale = 'zh_CN') {
   const key = `${locale}:${rel}`;
@@ -250,6 +259,9 @@ export function loadTranslation(rel, locale = 'zh_CN') {
 export function applyStoryTranslation(storyId, lines, locale = 'zh_CN') {
   const tr = loadTranslation(`stories/${storyId}`, locale);
   if (!tr?.lines) return { lines, translated: false };
+  // 화자 이름: 스토리별 지정(tr.speakers) → 전체 대응표(src/data/speakers.json) 순
+  const speakerMap = { ...(loadSpeakerMap() ?? {}), ...(tr.speakers ?? {}) };
+  const translateSpeaker = (name) => (name && speakerMap[name]) || name;
   const targets = lines.filter((l) => typeof l.text === 'string' && l.text.length > 0);
   if (targets.length !== tr.lines.length) {
     console.warn(`[i18n] ${storyId}: 번역 줄 수 불일치 (${tr.lines.length} vs ${targets.length}) — 원문 표시`);
@@ -257,11 +269,12 @@ export function applyStoryTranslation(storyId, lines, locale = 'zh_CN') {
   }
   let i = 0;
   const out = lines.map((l) => {
+    const speaker = l.speaker ? translateSpeaker(l.speaker) : l.speaker;
     if (typeof l.text === 'string' && l.text.length > 0) {
       const t = tr.lines[i++];
-      return { ...l, text: t, original: l.text };
+      return { ...l, speaker, text: t, original: l.text };
     }
-    return l;
+    return speaker === l.speaker ? l : { ...l, speaker };
   });
   // 선택지 옵션 텍스트도 함께 번역되어 있으면 적용
   if (tr.options) {

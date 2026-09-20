@@ -761,6 +761,24 @@ try {
 
 const operatorList = [...operators.values()].sort((a, b) => (b.rarity ?? 0) - (a.rarity ?? 0) || a.name.localeCompare(b.name, 'ko'));
 
+// 화자 이름 대응표: CN 전용 스토리를 읽을 때 [name="菲亚梅塔"] 같은 화자를 한국어로 바꾸는 데 쓴다.
+//   1) character_table 의 kr/cn 이름 쌍, 2) handbook_info_table 의 NPC, 3) CN 전용 오퍼레이터의 번역 이름
+const speakerMap = {};
+const addSpeaker = (cn, kr) => {
+  if (cn && kr && cn !== kr && !speakerMap[cn]) speakerMap[cn] = kr;
+};
+for (const id of unionKeys(character)) {
+  addSpeaker(character[LOCALES[1]]?.[id]?.name, character[PRIMARY]?.[id]?.name);
+}
+for (const id of unionKeys({ [PRIMARY]: handbook[PRIMARY]?.npcDict ?? {}, [LOCALES[1]]: handbook[LOCALES[1]]?.npcDict ?? {} })) {
+  addSpeaker(handbook[LOCALES[1]]?.npcDict?.[id]?.name, handbook[PRIMARY]?.npcDict?.[id]?.name);
+}
+for (const op of operators.values()) {
+  if (op.translated && op.nameCn) addSpeaker(op.nameCn, op.name);
+}
+write('speakers.json', speakerMap);
+log(`  화자 이름 대응 ${Object.keys(speakerMap).length}개`);
+
 write('stories.json', { groups, stories });
 write('operators.json', operatorList);
 write('timeline.json', timeline);

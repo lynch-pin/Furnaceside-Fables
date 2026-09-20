@@ -128,6 +128,8 @@ const readLines = (file) => {
 const expressions = new Map();
 /** n-gram 후보: cn → { docs, count } */
 const ngrams = new Map();
+/** 화자 이름 쌍: cn 화자 → Map<kr 화자, 횟수>. 정렬된 대본에서 직접 뽑으므로 NPC 이름까지 잡힌다. */
+const speakerPairs = new Map();
 
 let aligned = 0;
 let skipped = 0;
@@ -148,6 +150,15 @@ for (const s of stories) {
   const seenNgrams = new Set();
 
   for (let i = 0; i < cnLines.length; i++) {
+    // 화자 이름 (대사 줄에서만, 양쪽 모두 이름이 있을 때)
+    const cnSp = cnLines[i].speaker;
+    const krSp = krLines[i].speaker;
+    if (cnSp && krSp && cnSp !== krSp && CJK.test(cnSp)) {
+      let m = speakerPairs.get(cnSp);
+      if (!m) speakerPairs.set(cnSp, (m = new Map()));
+      m.set(krSp, (m.get(krSp) ?? 0) + 1);
+    }
+
     const cnRaw = stripRichText(cnLines[i].text).replace(/\s+/g, ' ').trim();
     const krRaw = stripRichText(krLines[i].text).replace(/\s+/g, ' ').trim();
     if (!cnRaw || onlyCjkPunct(cnRaw)) continue;
@@ -309,6 +320,27 @@ const out = {
   phrases: phraseList,
   words: wordList,
 };
+// 화자 이름 대응표 보강: 대본에서 직접 확인한 쌍을 우선한다 (NPC·단역까지 포함)
+const speakerFile = path.join(OUT_DIR, 'speakers.json');
+if (fs.existsSync(speakerFile)) {
+  const map = JSON.parse(fs.readFileSync(speakerFile, 'utf8'));
+  let added = 0;
+  let fixed = 0;
+  for (const [cn, krs] of speakerPairs) {
+    const [kr, n] = [...krs.entries()].sort((a, b) => b[1] - a[1])[0];
+    if (n < 2 || !kr) continue;
+    if (!map[cn]) {
+      map[cn] = kr;
+      added++;
+    } else if (map[cn] !== kr && n >= 3) {
+      map[cn] = kr;
+      fixed++;
+    }
+  }
+  fs.writeFileSync(speakerFile, JSON.stringify(map));
+  log(`  화자 이름: 대본에서 ${added}개 추가, ${fixed}개 교정 → 총 ${Object.keys(map).length}개`);
+}
+
 fs.mkdirSync(OUT_DIR, { recursive: true });
 const file = path.join(OUT_DIR, 'glossary.json');
 fs.writeFileSync(file, JSON.stringify(out));
