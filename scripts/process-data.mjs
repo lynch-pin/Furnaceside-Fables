@@ -606,22 +606,41 @@ for (const [id, op] of operators) {
       locale: hbPick.locale,
       translated: Boolean(trRecords?.[si]),
     }));
-    const trOpRecords = hbPick.needsTranslation ? trOp?.operatorRecords : null;
-    const avgList = Array.isArray(hb.handbookAvgList) ? hb.handbookAvgList : Object.values(hb.handbookAvgList ?? {});
-    op.operatorRecords = avgList
-      .sort((a, b) => (a.sortId ?? 0) - (b.sortId ?? 0))
-      .map((set, si) => ({
-        setId: set.storySetId,
-        name: trOpRecords?.[si]?.name ?? set.storySetName,
-        date: toKstDate(set.storyGetTime),
-        unlock: set.unlockParam ?? [],
-        stories: (set.avgList ?? []).map((a, ai) => ({
-          id: a.storyId,
-          name: trOpRecords?.[si]?.stories?.[ai]?.name ?? a.storyIntro,
-          txt: a.storyTxt,
-          available: storyIndex.get(a.storyId)?.available ?? false,
-        })),
-      }));
+    // 오퍼레이터 레코드는 로케일 합집합으로 만든다.
+    // 한국 서버에 있는 오퍼레이터라도 중국 서버에만 추가된 레코드가 있을 수 있다 (예: 피아메타 두 번째 기록).
+    const avgOf = (locale) => {
+      const e = handbook[locale]?.handbookDict?.[id];
+      const l = e?.handbookAvgList;
+      return Array.isArray(l) ? l : Object.values(l ?? {});
+    };
+    const setByAvg = new Map(); // setId → { set, locale }
+    for (const locale of [...LOCALES].reverse()) {
+      // 뒤에 오는 주 언어(ko_KR)가 같은 id 를 덮어쓴다
+      for (const set of avgOf(locale)) setByAvg.set(set.storySetId, { set, locale });
+    }
+    op.operatorRecords = [...setByAvg.values()]
+      .sort((a, b) => (a.set.sortId ?? 0) - (b.set.sortId ?? 0))
+      .map(({ set, locale }) => {
+        // 이름·스토리 제목은 story_review 쪽 번역(TR_META)이 이미 적용된 값을 우선 쓴다
+        const group = groups.find((g) => g.id === set.storySetId);
+        const fromCn = locale !== PRIMARY;
+        const name = group?.name ?? set.storySetName;
+        return {
+          setId: set.storySetId,
+          name,
+          date: toKstDate(set.storyGetTime),
+          unlock: set.unlockParam ?? [],
+          sourceLocale: locale,
+          translated: fromCn && Boolean(group?.translated),
+          needsTranslation: fromCn && !group?.translated,
+          stories: (set.avgList ?? []).map((a) => ({
+            id: a.storyId,
+            name: storyIndex.get(a.storyId)?.name ?? a.storyIntro,
+            txt: a.storyTxt,
+            available: storyIndex.get(a.storyId)?.available ?? false,
+          })),
+        };
+      });
   }
 
   // 5-b. 대사 (charword_table). wordKey 단위(기본/스킨 보이스 세트)로 묶는다.

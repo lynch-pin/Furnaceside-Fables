@@ -167,7 +167,10 @@ const CV_LABEL: Record<string, string> = { KR: '한국어', JP: '일본어', CN_
       {op.operatorRecords.length === 0 && <p class="muted">오퍼레이터 레코드가 없습니다.</p>}
       {op.operatorRecords.map((set: any) => (
         <section class="record">
-          <h3>{set.name} <span class="small muted">{set.date ?? ''}</span></h3>
+          <h3>
+            {set.name} <span class="small muted">{set.date ?? ''}</span>
+            <SourceBadge locale={set.sourceLocale} translated={set.translated} />
+          </h3>
           <ul class="list-plain">
             {set.stories.map((s: any) => (
               <li>
