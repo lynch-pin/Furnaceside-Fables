@@ -60,7 +60,20 @@ public/CNAME              커스텀 도메인
 오디오 파일을 만들지 않으므로 용량이 늘지 않지만, 기기에 중국어 음성이 없으면 버튼이 나타나지 않는다.
 자료를 늘리는 방법은 `glossary/README.md` 참고.
 
-## 이미지
+## 이미지 가져오기 (별도 용도)
+
+`assets-catalog/` 에 이미지 경로 목록과 이름 대응표만 커밋해 두었다. 이미지 자체는 담지 않는다.
+`npm run image` (= `scripts/fetch-image.mjs`) 로 오퍼레이터·이벤트·경로를 찾아 원본에서 내려받을 수 있고,
+Claude Code 세션에서는 `.claude/skills/fetch-image/` 스킬이 이 절차를 자동으로 따른다.
+
+```bash
+npm run image -- op 첸               # 첸의 이미지 목록
+npm run image -- op 첸 --get e2      # 정예2 초상화 받기
+npm run image -- event 월루몽드       # 이벤트 이미지 목록
+npm run image -- search bg_lt        # 경로 검색
+```
+
+## 이미지 (사이트에서 쓰는 것)
 
 이미지는 저장소에 넣지 않고 외부 raw 파일을 직접 링크한다 (`src/lib/assets.mjs`).
 

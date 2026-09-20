@@ -20,6 +20,9 @@ gamedata/
 # 번역 작업용 임시 내보내기 (npm run translate -- --export-meta)
 translations/zh_CN/todo/
 
+# 이미지 요청 시 받은 파일 (scripts/fetch-image.mjs)
+downloads/
+
 # 로컬 환경
 .env
 .env.*

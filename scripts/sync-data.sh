@@ -83,7 +83,7 @@ else
   git -C "$ASSETS_INDEX_DIR" reset --soft --quiet FETCH_HEAD
 fi
 git -C "$ASSETS_INDEX_DIR" ls-tree -r --name-only HEAD \
-  | grep -E '^assets/torappu/dynamicassets/(arts/(charavatars|ui/storyreview|ui/homebanners/zone)|avg/(backgrounds|images))/' \
+  | grep -E '^assets/torappu/dynamicassets/(arts|avg)/' \
   > "$ASSETS_INDEX_FILE"
 echo "[sync-data] 에셋 인덱스: $(wc -l < "$ASSETS_INDEX_FILE") 항목"
 
@@ -100,7 +100,8 @@ else
   retry 4 git -C "$AVATAR_INDEX_DIR" fetch --depth 1 origin "$AVATAR_REF"
   git -C "$AVATAR_INDEX_DIR" reset --soft --quiet FETCH_HEAD
 fi
-git -C "$AVATAR_INDEX_DIR" ls-tree -r --name-only HEAD | grep -E '^(avatar|portrait)/' > "$AVATAR_INDEX_FILE"
+git -C "$AVATAR_INDEX_DIR" ls-tree -r --name-only HEAD \
+  | grep -E '^(avatar|portrait|skin|item|enemy|skill|building_skill)/' > "$AVATAR_INDEX_FILE"
 echo "[sync-data] 아바타 인덱스: $(wc -l < "$AVATAR_INDEX_FILE") 항목"
 for lang in kr cn; do
   ver_file="$GAMEDATA_DIR/$lang/gamedata/excel/data_version.txt"

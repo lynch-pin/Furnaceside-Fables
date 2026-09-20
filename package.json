@@ -9,7 +9,7 @@
   },
   "scripts": {
     "sync": "bash scripts/sync-data.sh",
-    "process": "node scripts/process-data.mjs && npm run glossary",
+    "process": "node scripts/process-data.mjs && npm run glossary && npm run catalog",
     "prepare": "npm run sync && npm run process",
     "dev": "astro dev",
     "build": "astro build",
@@ -17,7 +17,9 @@
     "astro": "astro",
     "test": "node --test tests/*.test.mjs",
     "translate": "node scripts/translate.mjs",
-    "glossary": "node --max-old-space-size=3500 scripts/build-glossary.mjs"
+    "glossary": "node --max-old-space-size=3500 scripts/build-glossary.mjs",
+    "catalog": "node scripts/build-asset-catalog.mjs",
+    "image": "node scripts/fetch-image.mjs"
   },
   "dependencies": {
     "astro": "^7.3.3"
