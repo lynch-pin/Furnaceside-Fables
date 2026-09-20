@@ -7,6 +7,9 @@
  *     - 단어: glossary/words.json 에 정리한 뜻풀이와 예문
  *   오퍼레이터 이름은 여기 넣지 않는다 (/operator 에서 중국어 이름을 함께 보여 준다).
  *
+ *   발음 듣기는 브라우저 내장 음성 합성(Web Speech API)을 쓴다. 오디오 파일을 만들지 않으므로 용량이 늘지 않지만,
+ *   기기에 중국어 음성이 없으면 동작하지 않아 버튼을 숨긴다.
+ *
  * TODO(glossary): glossary/phrase-candidates.json 의 후보를 계속 정리해 표현을 늘릴 것.
  */
 import Layout from '../layouts/Layout.astro';
@@ -34,6 +37,12 @@ const catCount = (c: string) => words.filter((w: any) => w.category === c).lengt
       <input type="search" id="g-search" placeholder="중국어 / 병음 / 한국어" autocomplete="off" />
     </label>
 
+    <div class="shortcuts speed" id="speed-toggle" role="group" aria-label="발음 속도" hidden>
+      <span class="shortcuts__label">발음</span>
+      <button type="button" data-rate="1" aria-pressed="true">보통</button>
+      <button type="button" data-rate="0.6" aria-pressed="false">느리게</button>
+    </div>
+
     <div class="tabs" role="tablist" aria-label="단어집">
       <button role="tab" id="tab-phrases" aria-controls="panel-phrases" aria-selected="true" data-tab="phrases">
         회화 표현 <span class="small">{phrases.length}</span>
@@ -52,6 +61,7 @@ const catCount = (c: string) => words.filter((w: any) => w.category === c).lengt
             <details class="entry card">
               <summary class="entry__head">
                 <span class="cn" lang="zh-Hans">{p.cn}</span>
+                <button class="speak" type="button" data-say={p.cn} aria-label="발음 듣기" title="발음 듣기" hidden>♪</button>
                 <span class="pinyin muted">{p.pinyin}</span>
                 <span class="kr">{p.kr}</span>
                 {p.docs > 0 && <span class="muted small docs">{p.docs}편</span>}
@@ -62,6 +72,7 @@ const catCount = (c: string) => words.filter((w: any) => w.category === c).lengt
                   {p.words.map((w: any) => (
                     <li class="word">
                       <span class="word__cn" lang="zh-Hans">{w.cn}</span>
+                      <button class="speak" type="button" data-say={w.cn} aria-label="발음 듣기" title="발음 듣기" hidden>♪</button>
                       <span class="word__py muted">{w.pinyin}</span>
                       <span class="word__kr">{w.kr}</span>
                     </li>
@@ -102,6 +113,7 @@ const catCount = (c: string) => words.filter((w: any) => w.category === c).lengt
           <li class="entry card" data-cat={w.category} data-key={`${w.cn} ${w.pinyin ?? ''} ${w.kr}`.toLowerCase()}>
             <div class="entry__head">
               <span class="cn" lang="zh-Hans">{w.cn}</span>
+              <button class="speak" type="button" data-say={w.cn} aria-label="발음 듣기" title="발음 듣기" hidden>♪</button>
               {w.pinyin && <span class="pinyin muted">{w.pinyin}</span>}
               <span class="kr">{w.kr}</span>
               <span class="badge">{w.category}</span>
@@ -123,6 +135,64 @@ const catCount = (c: string) => words.filter((w: any) => w.category === c).lengt
 </Layout>
 
 <script>
+  // 발음 듣기: 브라우저 내장 음성 합성(Web Speech API). 오디오 파일을 받지 않는다.
+  // 중국어 음성이 없는 기기에서는 버튼을 숨긴 채로 둔다.
+  const synth = window.speechSynthesis;
+  if (synth) {
+    let zhVoice: SpeechSynthesisVoice | null = null;
+    let rate = 1;
+    try {
+      const saved = Number(localStorage.getItem('tts-rate'));
+      if (saved > 0) rate = saved;
+    } catch {}
+
+    const speedToggle = document.getElementById('speed-toggle');
+    const rateButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-rate]'));
+
+    const pickVoice = () => {
+      const voices = synth.getVoices();
+      zhVoice =
+        voices.find((v) => v.lang.replace('_', '-').toLowerCase().startsWith('zh-cn')) ??
+        voices.find((v) => v.lang.toLowerCase().startsWith('zh')) ??
+        null;
+      // 음성 목록이 비어 있는 브라우저도 lang 지정만으로 읽어 주는 경우가 있어, 목록이 있을 때만 판단한다
+      const usable = zhVoice !== null || voices.length === 0;
+      for (const b of document.querySelectorAll<HTMLButtonElement>('.speak')) b.hidden = !usable;
+      if (speedToggle) speedToggle.hidden = !usable;
+    };
+    pickVoice();
+    synth.addEventListener?.('voiceschanged', pickVoice);
+
+    const setRate = (v: number) => {
+      rate = v;
+      for (const b of rateButtons) b.setAttribute('aria-pressed', String(Number(b.dataset.rate) === v));
+      try {
+        localStorage.setItem('tts-rate', String(v));
+      } catch {}
+    };
+    setRate(rate);
+    for (const b of rateButtons) b.addEventListener('click', () => setRate(Number(b.dataset.rate)));
+
+    document.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement)?.closest?.('[data-say]') as HTMLButtonElement | null;
+      if (!btn) return;
+      // <summary> 안의 버튼이 펼침 토글을 건드리지 않게 한다
+      e.preventDefault();
+      e.stopPropagation();
+      const text = btn.dataset.say ?? '';
+      if (!text) return;
+      synth.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'zh-CN';
+      if (zhVoice) u.voice = zhVoice;
+      u.rate = rate;
+      btn.classList.add('speak--on');
+      u.onend = () => btn.classList.remove('speak--on');
+      u.onerror = () => btn.classList.remove('speak--on');
+      synth.speak(u);
+    });
+  }
+
   // 탭 전환 + 검색 + 분류 필터. 상태는 URL 해시(#t=words&q=…&c=명사,동사)에 저장.
   const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
   const search = document.getElementById('g-search') as HTMLInputElement;
@@ -271,7 +341,7 @@ const catCount = (c: string) => words.filter((w: any) => w.category === c).lengt
   }
   .word {
     display: grid;
-    grid-template-columns: minmax(3rem, auto) minmax(4rem, 7rem) 1fr;
+    grid-template-columns: minmax(3rem, auto) 1.5rem minmax(4rem, 7rem) 1fr;
     gap: 0.5rem;
     align-items: baseline;
     padding: 0.15rem 0;
@@ -290,6 +360,31 @@ const catCount = (c: string) => words.filter((w: any) => w.category === c).lengt
   }
   .word__kr {
     font-size: 0.95rem;
+  }
+  .speak {
+    font: inherit;
+    font-size: 0.8rem;
+    line-height: 1;
+    width: 1.5rem;
+    height: 1.5rem;
+    border: 1px solid var(--color-line);
+    border-radius: 50%;
+    background: var(--color-bg);
+    color: var(--color-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .speak:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+  .speak--on {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+    background: var(--color-accent-soft);
+  }
+  .speed {
+    margin: 0 0 0.5rem;
   }
   .literal,
   .note,
