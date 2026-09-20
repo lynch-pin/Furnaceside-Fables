@@ -5,10 +5,12 @@
  * 한국 서버(kr)와 중국 서버(cn)의 스토리 스크립트는 줄 구조가 같아서 줄 단위로 1:1 정렬된다.
  * 이 병렬 말뭉치에서 다음을 뽑는다.
  *
- *   1. 표현/문장  자주 나오는 중국어 대사 → 한국어 번역 (완전 자동)
- *   2. 고유명사    게임 데이터의 kr/cn 대응표(오퍼레이터·세력·지역·아이템 이름) + 등장 빈도
- *   3. 일반 단어   glossary/words.json 에 직접 적어 둔 뜻풀이 + 자동 빈도·예문
- *                  (아직 정리하지 않은 후보는 glossary/candidates.json 로 나간다)
+ *   1. 회화 표현  glossary/phrases.json 에 정리한 문장(병음·직역·단어별 해설) + 자동 빈도·출처
+ *   2. 단어       glossary/words.json 에 정리한 뜻풀이 + 자동 빈도·예문
+ *   3. 후보       아직 정리하지 않은 표현·단어 → glossary/candidates.json, glossary/phrase-candidates.json
+ *
+ * 오퍼레이터·아이템 등 게임 데이터의 고유명사는 단어집에 넣지 않는다.
+ * (오퍼레이터의 중국어 이름은 /operator 에서 바로 볼 수 있다.)
  *
  * 출력: src/data/glossary.json
  * 사용: npm run glossary (npm run process 에 포함)
@@ -84,13 +86,18 @@ log(`  고유명사 후보 ${termByCn.size}개`);
 // ---------------------------------------------------------------------------
 // 2. 직접 정리한 일반 단어 (glossary/words.json)
 // ---------------------------------------------------------------------------
+const phrasesFile = path.join(GLOSSARY_DIR, 'phrases.json');
+/** @type {{cn:string,pinyin:string,kr:string,literal?:string,words:{cn:string,pinyin:string,kr:string}[],note?:string}[]} */
+const curatedPhrases = fs.existsSync(phrasesFile) ? JSON.parse(fs.readFileSync(phrasesFile, 'utf8')) : [];
+
 const curatedFile = path.join(GLOSSARY_DIR, 'words.json');
 /** @type {{cn:string, pinyin?:string, kr:string, category?:string, note?:string}[]} */
 const curated = fs.existsSync(curatedFile) ? JSON.parse(fs.readFileSync(curatedFile, 'utf8')).filter((w) => w.cn) : [];
-log(`  직접 정리한 단어 ${curated.length}개`);
+log(`  직접 정리한 단어 ${curated.length}개 · 회화 표현 ${curatedPhrases.length}개`);
 
 // 빈도·예문을 붙일 대상 (고유명사 + 정리 단어)
 const lookup = new Map(); // cn → entry
+// 고유명사는 회화 표현 후보에서 인명·지명을 걸러내는 용도로만 쓴다 (출력에는 넣지 않는다)
 for (const [cn, p] of termByCn) lookup.set(cn, { cn, kr: p.kr, category: p.category, source: 'data', docs: 0, count: 0, example: null });
 for (const w of curated) {
   lookup.set(w.cn, {
@@ -220,46 +227,61 @@ log(`  정렬된 스토리 ${aligned}편 (줄 수 불일치로 제외 ${skipped}
 // ---------------------------------------------------------------------------
 const storyRef = (id) => ({ id, name: storyMeta.get(id)?.name ?? null, group: storyMeta.get(id)?.groupName ?? null });
 
-// 표현: 등장 스토리 수 기준
-const exprList = [...expressions.entries()]
-  .filter(([, v]) => v.docs >= EXPR_MIN_DOCS)
-  .map(([key, v]) => {
-    const kr = [...v.kr.entries()].sort((a, b) => b[1] - a[1]);
-    const surface = [...v.surface.entries()].sort((a, b) => b[1] - a[1])[0][0];
+// 자동 추출한 표현 (빈도·출처를 정리한 표현에 붙이고, 나머지는 후보로 남긴다)
+const exprByKey = new Map();
+for (const [key, v] of expressions) {
+  if (v.docs < EXPR_MIN_DOCS) continue;
+  const kr = [...v.kr.entries()].sort((a, b) => b[1] - a[1]);
+  const surface = [...v.surface.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  exprByKey.set(key, { surface, kr: kr[0][0], krAlts: kr.slice(1, 3).map(([t]) => t), count: v.count, docs: v.docs, story: v.story, len: cjkCount(key) });
+}
+
+// 정리한 회화 표현 + 자동 빈도
+const phraseList = curatedPhrases
+  .map((p) => {
+    const hit = exprByKey.get(exprKey(p.cn)) ?? null;
     return {
-      cn: surface,
-      key,
-      kr: kr[0][0],
-      // 같은 중국어 문장의 다른 번역 (최대 2개)
-      krAlts: kr.slice(1, 3).map(([t]) => t),
-      count: v.count,
-      docs: v.docs,
-      len: cjkCount(key),
-      story: storyRef(v.story),
+      ...p,
+      docs: hit?.docs ?? 0,
+      count: hit?.count ?? 0,
+      // 스토리에서 실제로 쓰인 번역 (한국 서버 표기). 정리한 번역과 다를 수 있다.
+      krInStory: hit && hit.kr !== p.kr ? hit.kr : null,
+      story: hit ? storyRef(hit.story) : null,
     };
   })
-  .sort((a, b) => b.docs - a.docs || b.count - a.count)
-  .slice(0, 2500);
+  .sort((a, b) => b.docs - a.docs || a.cn.localeCompare(b.cn));
 
-// 단어: 실제로 스토리에 나온 것만
+// 단어: 직접 정리한 것만 (고유명사는 제외)
 const wordList = [...lookup.values()]
-  .filter((w) => w.docs >= (w.source === 'curated' ? 1 : TERM_MIN_DOCS))
-  // 게임 데이터에서 뽑은 고유명사는 번역 대조로 확인된 비율이 낮으면 버린다 (일반 명사와 겹치는 이름)
-  .filter((w) => w.source === 'curated' || (w.confirmed ?? 0) / Math.max(w.count, 1) >= 0.45)
-  .map(({ confirmed, ...w }) => ({ ...w, example: w.example ? { ...w.example, story: storyRef(w.example.storyId) } : null }))
+  .filter((w) => w.source === 'curated' && w.docs >= 1)
+  .map(({ confirmed, source, ...w }) => ({ ...w, example: w.example ? { ...w.example, story: storyRef(w.example.storyId) } : null }))
   .sort((a, b) => b.docs - a.docs || b.count - a.count);
 
-// 후보: 아직 뜻을 적지 않은 n-gram (직접 정리용)
+// 아직 정리하지 않은 표현 후보 (인명·지문·말더듬 제외)
+const properNames = [...termByCn.keys()].filter((c) => c.length >= 2);
+const phraseKeys = new Set(curatedPhrases.map((p) => exprKey(p.cn)));
+const INTERJ = /^[嗯啊呃唔哈呼哦噢喔嘿哎唉咦哼吧吗呢的了是]+$/;
+const phraseCandidates = [...exprByKey.entries()]
+  .filter(([key, v]) => {
+    if (v.len < 3 || phraseKeys.has(key) || INTERJ.test(key)) return false;
+    if (/[（(].*[）)]/.test(v.surface)) return false;
+    if (/(.)、\1/.test(v.surface)) return false;
+    return !properNames.some((n) => v.surface.includes(n));
+  })
+  .map(([, v]) => ({ cn: v.surface, kr: v.kr, docs: v.docs }))
+  .sort((a, b) => b.docs - a.docs)
+  .slice(0, 800);
+
+// 아직 뜻풀이가 없는 단어 후보 (n-gram). 더 긴 후보에 거의 항상 포함되는 조각은 제외한다.
 const known = new Set([...lookup.keys()]);
-const candidates = [...ngrams.entries()]
+const rawCandidates = [...ngrams.entries()]
   .filter(([g, v]) => v.docs >= 40 && !known.has(g))
   .map(([cn, v]) => ({ cn, docs: v.docs, count: v.count }))
   .sort((a, b) => b.docs - a.docs)
   .slice(0, 3000);
-// 더 긴 후보에 거의 항상 포함되는 짧은 조각은 제외 (예: '罗德'는 '罗德岛'의 일부)
-const byLen = [...candidates].sort((a, b) => b.cn.length - a.cn.length);
+const byLen = [...rawCandidates].sort((a, b) => b.cn.length - a.cn.length);
 const dominated = new Set();
-for (const short of candidates) {
+for (const short of rawCandidates) {
   for (const long of byLen) {
     if (long.cn.length <= short.cn.length) break;
     if (long.cn.includes(short.cn) && long.count >= short.count * 0.8) {
@@ -268,27 +290,28 @@ for (const short of candidates) {
     }
   }
 }
-const candidateList = candidates.filter((c) => !dominated.has(c.cn)).slice(0, 1200);
+const candidateList = rawCandidates.filter((c) => !dominated.has(c.cn)).slice(0, 1200);
 
 fs.mkdirSync(GLOSSARY_DIR, { recursive: true });
 fs.writeFileSync(path.join(GLOSSARY_DIR, 'candidates.json'), JSON.stringify(candidateList, null, 1));
+fs.writeFileSync(path.join(GLOSSARY_DIR, 'phrase-candidates.json'), JSON.stringify(phraseCandidates, null, 1));
 
 const out = {
   generatedAt: new Date().toISOString(),
   stats: {
     alignedStories: aligned,
     skippedStories: skipped,
+    phrases: phraseList.length,
     words: wordList.length,
-    curated: wordList.filter((w) => w.source === 'curated').length,
-    expressions: exprList.length,
-    candidates: candidateList.length,
+    phraseCandidates: phraseCandidates.length,
+    wordCandidates: candidateList.length,
   },
+  phrases: phraseList,
   words: wordList,
-  expressions: exprList,
 };
 fs.mkdirSync(OUT_DIR, { recursive: true });
 const file = path.join(OUT_DIR, 'glossary.json');
 fs.writeFileSync(file, JSON.stringify(out));
 log(`  → ${path.relative(ROOT, file)} (${(fs.statSync(file).size / 1024 / 1024).toFixed(1)} MB)`);
-log(`  단어 ${wordList.length} (정리 ${out.stats.curated}) · 표현 ${exprList.length} · 후보 ${candidateList.length}`);
+log(`  회화 표현 ${phraseList.length} · 단어 ${wordList.length} · 후보(표현 ${phraseCandidates.length} / 단어 ${candidateList.length})`);
 log(`완료 (${((Date.now() - t0) / 1000).toFixed(1)}s)`);

@@ -1,31 +1,32 @@
 ---
 /**
- * /glossary — 중국어-한국어 단어집.
- *   한국 서버와 중국 서버 스토리 스크립트가 줄 단위로 1:1 대응한다는 점을 이용해
- *   scripts/build-glossary.mjs 가 만든 대역 자료를 보여 준다.
- *     - 단어: 게임 데이터의 고유명사 대응 + glossary/words.json 에 정리한 뜻풀이, 빈도와 예문 포함
- *     - 표현: 스토리에 자주 나오는 중국어 대사와 그 한국어 번역
+ * /glossary — 중국어 회화 표현 단어집.
+ *   한국 서버와 중국 서버 스토리 스크립트가 줄 단위로 1:1 대응하는 점을 이용해
+ *   scripts/build-glossary.mjs 가 만든 자료를 보여 준다.
+ *     - 회화 표현: glossary/phrases.json 에 정리한 문장 (병음·직역·단어별 해설), 등장 빈도와 출처 포함
+ *     - 단어: glossary/words.json 에 정리한 뜻풀이와 예문
+ *   오퍼레이터 이름은 여기 넣지 않는다 (/operator 에서 중국어 이름을 함께 보여 준다).
  *
- * TODO(glossary): glossary/candidates.json 의 후보를 계속 정리해 words.json 을 늘릴 것.
+ * TODO(glossary): glossary/phrase-candidates.json 의 후보를 계속 정리해 표현을 늘릴 것.
  */
 import Layout from '../layouts/Layout.astro';
 import { loadGlossary } from '../lib/data.mjs';
 
 const glossary = loadGlossary();
+const phrases = glossary.phrases;
 const words = glossary.words;
-const expressions = glossary.expressions.slice(0, 800);
 
-const CATEGORY_ORDER = ['세계관', '오퍼레이터', '세력', '지역', '인물', '적', '아이템', '명사', '동사', '형용사', '부사', '대명사', '접속사', '조사·어기', '수량', '인사·감탄', '일반'];
+const CATEGORY_ORDER = ['세계관', '명사', '동사', '형용사', '부사', '대명사', '접속사', '조사·어기', '수량', '인사·감탄'];
 const categories = CATEGORY_ORDER.filter((c) => words.some((w: any) => w.category === c));
 const catCount = (c: string) => words.filter((w: any) => w.category === c).length;
 ---
 
-<Layout title="단어집" description="아크나이츠 스토리에 자주 나오는 중국어 단어와 표현을 한국어 번역과 함께 모았습니다.">
+<Layout title="단어집" description="아크나이츠 스토리에 자주 나오는 중국어 회화 표현을 병음·직역·단어 해설과 함께 모았습니다.">
   <div class="container">
     <h1>단어집</h1>
     <p class="muted small">
-      한국 서버와 중국 서버의 스토리 스크립트를 줄 단위로 맞춰 만든 중국어-한국어 대역 자료입니다.
-      스토리 {glossary.stats.alignedStories}편에서 단어 {words.length}개와 표현 {glossary.expressions.length}개를 모았습니다.
+      한국 서버와 중국 서버의 스토리 스크립트를 줄 단위로 맞춰 만든 중국어-한국어 자료입니다.
+      스토리 {glossary.stats.alignedStories}편에서 뽑았고, 표현을 누르면 단어별 해설이 펼쳐집니다.
     </p>
 
     <label class="search">
@@ -34,16 +35,61 @@ const catCount = (c: string) => words.filter((w: any) => w.category === c).lengt
     </label>
 
     <div class="tabs" role="tablist" aria-label="단어집">
-      <button role="tab" id="tab-words" aria-controls="panel-words" aria-selected="true" data-tab="words">
-        단어 <span class="small">{words.length}</span>
+      <button role="tab" id="tab-phrases" aria-controls="panel-phrases" aria-selected="true" data-tab="phrases">
+        회화 표현 <span class="small">{phrases.length}</span>
       </button>
-      <button role="tab" id="tab-expr" aria-controls="panel-expr" aria-selected="false" data-tab="expr">
-        표현 <span class="small">{expressions.length}</span>
+      <button role="tab" id="tab-words" aria-controls="panel-words" aria-selected="false" data-tab="words">
+        단어 <span class="small">{words.length}</span>
       </button>
     </div>
 
-    <section role="tabpanel" id="panel-words" aria-labelledby="tab-words">
-      <div class="shortcuts" role="group" aria-label="품사 필터" id="cat-filter">
+    <!-- 회화 표현 -->
+    <section role="tabpanel" id="panel-phrases" aria-labelledby="tab-phrases">
+      <p class="muted small" id="p-result"></p>
+      <ol class="list-plain entries" id="phrase-list">
+        {phrases.map((p: any) => (
+          <li data-key={`${p.cn} ${p.pinyin} ${p.kr}`.toLowerCase()}>
+            <details class="entry card">
+              <summary class="entry__head">
+                <span class="cn" lang="zh-Hans">{p.cn}</span>
+                <span class="pinyin muted">{p.pinyin}</span>
+                <span class="kr">{p.kr}</span>
+                {p.docs > 0 && <span class="muted small docs">{p.docs}편</span>}
+              </summary>
+              <div class="entry__body">
+                {p.literal && <p class="literal small"><span class="muted">직역</span> {p.literal}</p>}
+                <ol class="list-plain words">
+                  {p.words.map((w: any) => (
+                    <li class="word">
+                      <span class="word__cn" lang="zh-Hans">{w.cn}</span>
+                      <span class="word__py muted">{w.pinyin}</span>
+                      <span class="word__kr">{w.kr}</span>
+                    </li>
+                  ))}
+                </ol>
+                {p.note && <p class="note small muted">{p.note}</p>}
+                {(p.krInStory || p.story) && (
+                  <p class="source small muted">
+                    {p.krInStory && <>스토리 번역: {p.krInStory}</>}
+                    {p.story?.id && (
+                      <>
+                        {p.krInStory ? ' · ' : ''}
+                        <a href={`/story/${p.story.id}`}>{p.story.name ?? '예문 보기'}</a>
+                      </>
+                    )}
+                  </p>
+                )}
+              </div>
+            </details>
+          </li>
+        ))}
+      </ol>
+      {phrases.length === 0 && <p class="muted">아직 정리한 표현이 없습니다.</p>}
+    </section>
+
+    <!-- 단어 -->
+    <section role="tabpanel" id="panel-words" aria-labelledby="tab-words" hidden>
+      <div class="shortcuts" role="group" aria-label="분류 필터" id="cat-filter">
         <span class="shortcuts__label">분류</span>
         <button type="button" data-all aria-pressed="true">전체</button>
         {categories.map((c) => (
@@ -51,14 +97,9 @@ const catCount = (c: string) => words.filter((w: any) => w.category === c).lengt
         ))}
       </div>
       <p class="muted small" id="w-result"></p>
-
       <ol class="list-plain entries" id="word-list">
         {words.map((w: any) => (
-          <li
-            class="entry card"
-            data-cat={w.category}
-            data-key={`${w.cn} ${w.pinyin ?? ''} ${w.kr}`.toLowerCase()}
-          >
+          <li class="entry card" data-cat={w.category} data-key={`${w.cn} ${w.pinyin ?? ''} ${w.kr}`.toLowerCase()}>
             <div class="entry__head">
               <span class="cn" lang="zh-Hans">{w.cn}</span>
               {w.pinyin && <span class="pinyin muted">{w.pinyin}</span>}
@@ -71,29 +112,9 @@ const catCount = (c: string) => words.filter((w: any) => w.category === c).lengt
               <p class="example small">
                 <span lang="zh-Hans">{w.example.cn}</span>
                 <span class="muted"> — {w.example.kr}</span>
-                {w.example.story?.id && (
-                  <a class="muted" href={`/story/${w.example.story.id}`} title={w.example.story.name ?? ''}>›</a>
-                )}
+                {w.example.story?.id && <a class="muted" href={`/story/${w.example.story.id}`} title={w.example.story.name ?? ''}>›</a>}
               </p>
             )}
-          </li>
-        ))}
-      </ol>
-    </section>
-
-    <section role="tabpanel" id="panel-expr" aria-labelledby="tab-expr" hidden>
-      <p class="muted small">스토리에 자주 나오는 대사입니다. 같은 문장의 다른 번역이 있으면 함께 보여 줍니다.</p>
-      <p class="muted small" id="e-result"></p>
-      <ol class="list-plain entries" id="expr-list">
-        {expressions.map((e: any) => (
-          <li class="entry card" data-key={`${e.cn} ${e.kr}`.toLowerCase()}>
-            <div class="entry__head">
-              <span class="cn" lang="zh-Hans">{e.cn}</span>
-              <span class="kr">{e.kr}</span>
-              <span class="muted small docs">{e.docs}편</span>
-              {e.story?.id && <a class="muted small" href={`/story/${e.story.id}`} title={e.story.name ?? ''}>›</a>}
-            </div>
-            {e.krAlts?.length > 0 && <p class="alts small muted">다른 번역: {e.krAlts.join(' · ')}</p>}
           </li>
         ))}
       </ol>
@@ -102,16 +123,16 @@ const catCount = (c: string) => words.filter((w: any) => w.category === c).lengt
 </Layout>
 
 <script>
-  // 탭 전환 + 검색 + 분류 필터. 상태는 URL 해시(#t=expr&q=…&c=명사,동사)에 저장.
+  // 탭 전환 + 검색 + 분류 필터. 상태는 URL 해시(#t=words&q=…&c=명사,동사)에 저장.
   const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
   const search = document.getElementById('g-search') as HTMLInputElement;
+  const phraseItems = Array.from(document.querySelectorAll<HTMLLIElement>('#phrase-list > li'));
   const wordItems = Array.from(document.querySelectorAll<HTMLLIElement>('#word-list > li'));
-  const exprItems = Array.from(document.querySelectorAll<HTMLLIElement>('#expr-list > li'));
   const catRoot = document.getElementById('cat-filter')!;
   const catAll = catRoot.querySelector<HTMLButtonElement>('[data-all]')!;
   const catItems = Array.from(catRoot.querySelectorAll<HTMLButtonElement>('[data-value]'));
+  const pResult = document.getElementById('p-result')!;
   const wResult = document.getElementById('w-result')!;
-  const eResult = document.getElementById('e-result')!;
 
   const on = (b: HTMLButtonElement) => b.getAttribute('aria-pressed') === 'true';
   const set = (b: HTMLButtonElement, v: boolean) => b.setAttribute('aria-pressed', String(v));
@@ -119,6 +140,12 @@ const catCount = (c: string) => words.filter((w: any) => w.category === c).lengt
 
   const apply = () => {
     const q = search.value.trim().toLowerCase();
+    let pn = 0;
+    for (const li of phraseItems) {
+      const show = !q || (li.dataset.key ?? '').includes(q);
+      li.hidden = !show;
+      if (show) pn++;
+    }
     const cats = new Set(catItems.filter(on).map((b) => b.dataset.value!));
     let wn = 0;
     for (const li of wordItems) {
@@ -126,18 +153,12 @@ const catCount = (c: string) => words.filter((w: any) => w.category === c).lengt
       li.hidden = !show;
       if (show) wn++;
     }
-    let en = 0;
-    for (const li of exprItems) {
-      const show = !q || (li.dataset.key ?? '').includes(q);
-      li.hidden = !show;
-      if (show) en++;
-    }
     set(catAll, catItems.every(on));
+    pResult.textContent = pn === phraseItems.length ? '' : `${pn}개`;
     wResult.textContent = wn === wordItems.length ? '' : `${wn}개`;
-    eResult.textContent = en === exprItems.length ? '' : `${en}개`;
 
     const parts: string[] = [];
-    if (currentTab() !== 'words') parts.push(`t=${currentTab()}`);
+    if (currentTab() !== 'phrases') parts.push(`t=${currentTab()}`);
     if (q) parts.push(`q=${encodeURIComponent(q)}`);
     if (!catItems.every(on)) parts.push(`c=${[...cats].map(encodeURIComponent).join(',')}`);
     history.replaceState(null, '', parts.length ? `#${parts.join('&')}` : location.pathname);
@@ -172,7 +193,7 @@ const catCount = (c: string) => words.filter((w: any) => w.category === c).lengt
   search.addEventListener('input', apply);
 
   const params = new URLSearchParams(location.hash.slice(1));
-  if (params.get('t') === 'expr') selectTab('expr');
+  if (params.get('t') === 'words') selectTab('words');
   if (params.get('q')) search.value = params.get('q')!;
   if (params.get('c')) {
     const want = new Set(params.get('c')!.split(',').map(decodeURIComponent));
@@ -215,6 +236,11 @@ const catCount = (c: string) => words.filter((w: any) => w.category === c).lengt
     flex-wrap: wrap;
     align-items: baseline;
     gap: 0.3rem 0.6rem;
+    cursor: pointer;
+    list-style: none;
+  }
+  .entry__head::-webkit-details-marker {
+    display: none;
   }
   .cn {
     font-size: 1.15rem;
@@ -233,8 +259,41 @@ const catCount = (c: string) => words.filter((w: any) => w.category === c).lengt
     font-family: var(--font-sans);
     margin-left: auto;
   }
+  .entry__body {
+    border-top: 1px solid var(--color-line);
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+  }
+  .words {
+    display: grid;
+    gap: 0.25rem;
+    margin: 0.25rem 0;
+  }
+  .word {
+    display: grid;
+    grid-template-columns: minmax(3rem, auto) minmax(4rem, 7rem) 1fr;
+    gap: 0.5rem;
+    align-items: baseline;
+    padding: 0.15rem 0;
+    border-bottom: 1px dashed var(--color-line);
+  }
+  .word:last-child {
+    border-bottom: 0;
+  }
+  .word__cn {
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+  .word__py {
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+  }
+  .word__kr {
+    font-size: 0.95rem;
+  }
+  .literal,
   .note,
-  .alts,
+  .source,
   .example {
     margin: 0.2rem 0 0;
   }

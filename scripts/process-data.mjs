@@ -146,6 +146,8 @@ for (const id of unionKeys(character)) {
   const op = {
     id,
     name: name.text,
+    // 중국어 이름 (중국 서버 표기). 오퍼레이터 목록·상세에 함께 보여 준다.
+    nameCn: character[LOCALES[1]]?.[id]?.name ?? null,
     avatar: operatorAvatar(id),
     portraits,
     appellation: c.appellation ?? '',

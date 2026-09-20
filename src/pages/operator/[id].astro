@@ -72,7 +72,9 @@ const CV_LABEL: Record<string, string> = { KR: '한국어', JP: '일본어', CN_
           op.avatar && <img class="avatar op-head__avatar" src={op.avatar} alt="" decoding="async" />
         )}
         <h1>
-          {op.name} <span class="muted appellation">{op.appellation}</span>
+          {op.name}
+          <span class="muted appellation">{op.appellation}</span>
+          {op.nameCn && op.nameCn !== op.name && <span class="muted appellation" lang="zh-Hans">{op.nameCn}</span>}
           <SourceBadge locale={op.sourceLocale} translated={op.translated} />
         </h1>
       </div>

@@ -83,6 +83,7 @@ const serverCount = (v: string) => operators.filter((o) => serverOf(o) === v).le
                 {o.avatar ? <img class="avatar" src={o.avatar} alt="" loading="lazy" decoding="async" /> : <span class="avatar" />}
                 <span class="op__text">
                   <span class="op__name">{o.name} <SourceBadge locale={op_locale(o)} translated={o.translated} /></span>
+                  {o.nameCn && o.nameCn !== o.name && <span class="op__cn muted small" lang="zh-Hans">{o.nameCn}</span>}
                   <span class="muted small">
                     {PROFESSION_LABEL[o.profession] ?? o.profession}
                     {o.nationName ? ` · ${o.nationName}` : ''}
@@ -252,5 +253,8 @@ const serverCount = (v: string) => operators.filter((o) => serverOf(o) === v).le
   }
   .op__name {
     font-weight: 600;
+  }
+  .op__cn {
+    letter-spacing: 0.02em;
   }
 </style>
