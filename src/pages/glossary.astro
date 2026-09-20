@@ -1,0 +1,245 @@
+---
+/**
+ * /glossary — 중국어-한국어 단어집.
+ *   한국 서버와 중국 서버 스토리 스크립트가 줄 단위로 1:1 대응한다는 점을 이용해
+ *   scripts/build-glossary.mjs 가 만든 대역 자료를 보여 준다.
+ *     - 단어: 게임 데이터의 고유명사 대응 + glossary/words.json 에 정리한 뜻풀이, 빈도와 예문 포함
+ *     - 표현: 스토리에 자주 나오는 중국어 대사와 그 한국어 번역
+ *
+ * TODO(glossary): glossary/candidates.json 의 후보를 계속 정리해 words.json 을 늘릴 것.
+ */
+import Layout from '../layouts/Layout.astro';
+import { loadGlossary } from '../lib/data.mjs';
+
+const glossary = loadGlossary();
+const words = glossary.words;
+const expressions = glossary.expressions.slice(0, 800);
+
+const CATEGORY_ORDER = ['세계관', '오퍼레이터', '세력', '지역', '인물', '적', '아이템', '명사', '동사', '형용사', '부사', '대명사', '접속사', '조사·어기', '수량', '인사·감탄', '일반'];
+const categories = CATEGORY_ORDER.filter((c) => words.some((w: any) => w.category === c));
+const catCount = (c: string) => words.filter((w: any) => w.category === c).length;
+---
+
+<Layout title="단어집" description="아크나이츠 스토리에 자주 나오는 중국어 단어와 표현을 한국어 번역과 함께 모았습니다.">
+  <div class="container">
+    <h1>단어집</h1>
+    <p class="muted small">
+      한국 서버와 중국 서버의 스토리 스크립트를 줄 단위로 맞춰 만든 중국어-한국어 대역 자료입니다.
+      스토리 {glossary.stats.alignedStories}편에서 단어 {words.length}개와 표현 {glossary.expressions.length}개를 모았습니다.
+    </p>
+
+    <label class="search">
+      <span class="shortcuts__label">검색</span>
+      <input type="search" id="g-search" placeholder="중국어 / 병음 / 한국어" autocomplete="off" />
+    </label>
+
+    <div class="tabs" role="tablist" aria-label="단어집">
+      <button role="tab" id="tab-words" aria-controls="panel-words" aria-selected="true" data-tab="words">
+        단어 <span class="small">{words.length}</span>
+      </button>
+      <button role="tab" id="tab-expr" aria-controls="panel-expr" aria-selected="false" data-tab="expr">
+        표현 <span class="small">{expressions.length}</span>
+      </button>
+    </div>
+
+    <section role="tabpanel" id="panel-words" aria-labelledby="tab-words">
+      <div class="shortcuts" role="group" aria-label="품사 필터" id="cat-filter">
+        <span class="shortcuts__label">분류</span>
+        <button type="button" data-all aria-pressed="true">전체</button>
+        {categories.map((c) => (
+          <button type="button" data-value={c} aria-pressed="true">{c} <span class="muted small">{catCount(c)}</span></button>
+        ))}
+      </div>
+      <p class="muted small" id="w-result"></p>
+
+      <ol class="list-plain entries" id="word-list">
+        {words.map((w: any) => (
+          <li
+            class="entry card"
+            data-cat={w.category}
+            data-key={`${w.cn} ${w.pinyin ?? ''} ${w.kr}`.toLowerCase()}
+          >
+            <div class="entry__head">
+              <span class="cn" lang="zh-Hans">{w.cn}</span>
+              {w.pinyin && <span class="pinyin muted">{w.pinyin}</span>}
+              <span class="kr">{w.kr}</span>
+              <span class="badge">{w.category}</span>
+              <span class="muted small docs">{w.docs}편</span>
+            </div>
+            {w.note && <p class="note small muted">{w.note}</p>}
+            {w.example && (
+              <p class="example small">
+                <span lang="zh-Hans">{w.example.cn}</span>
+                <span class="muted"> — {w.example.kr}</span>
+                {w.example.story?.id && (
+                  <a class="muted" href={`/story/${w.example.story.id}`} title={w.example.story.name ?? ''}>›</a>
+                )}
+              </p>
+            )}
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section role="tabpanel" id="panel-expr" aria-labelledby="tab-expr" hidden>
+      <p class="muted small">스토리에 자주 나오는 대사입니다. 같은 문장의 다른 번역이 있으면 함께 보여 줍니다.</p>
+      <p class="muted small" id="e-result"></p>
+      <ol class="list-plain entries" id="expr-list">
+        {expressions.map((e: any) => (
+          <li class="entry card" data-key={`${e.cn} ${e.kr}`.toLowerCase()}>
+            <div class="entry__head">
+              <span class="cn" lang="zh-Hans">{e.cn}</span>
+              <span class="kr">{e.kr}</span>
+              <span class="muted small docs">{e.docs}편</span>
+              {e.story?.id && <a class="muted small" href={`/story/${e.story.id}`} title={e.story.name ?? ''}>›</a>}
+            </div>
+            {e.krAlts?.length > 0 && <p class="alts small muted">다른 번역: {e.krAlts.join(' · ')}</p>}
+          </li>
+        ))}
+      </ol>
+    </section>
+  </div>
+</Layout>
+
+<script>
+  // 탭 전환 + 검색 + 분류 필터. 상태는 URL 해시(#t=expr&q=…&c=명사,동사)에 저장.
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+  const search = document.getElementById('g-search') as HTMLInputElement;
+  const wordItems = Array.from(document.querySelectorAll<HTMLLIElement>('#word-list > li'));
+  const exprItems = Array.from(document.querySelectorAll<HTMLLIElement>('#expr-list > li'));
+  const catRoot = document.getElementById('cat-filter')!;
+  const catAll = catRoot.querySelector<HTMLButtonElement>('[data-all]')!;
+  const catItems = Array.from(catRoot.querySelectorAll<HTMLButtonElement>('[data-value]'));
+  const wResult = document.getElementById('w-result')!;
+  const eResult = document.getElementById('e-result')!;
+
+  const on = (b: HTMLButtonElement) => b.getAttribute('aria-pressed') === 'true';
+  const set = (b: HTMLButtonElement, v: boolean) => b.setAttribute('aria-pressed', String(v));
+  const currentTab = () => tabs.find((t) => t.getAttribute('aria-selected') === 'true')!.dataset.tab!;
+
+  const apply = () => {
+    const q = search.value.trim().toLowerCase();
+    const cats = new Set(catItems.filter(on).map((b) => b.dataset.value!));
+    let wn = 0;
+    for (const li of wordItems) {
+      const show = cats.has(li.dataset.cat!) && (!q || (li.dataset.key ?? '').includes(q));
+      li.hidden = !show;
+      if (show) wn++;
+    }
+    let en = 0;
+    for (const li of exprItems) {
+      const show = !q || (li.dataset.key ?? '').includes(q);
+      li.hidden = !show;
+      if (show) en++;
+    }
+    set(catAll, catItems.every(on));
+    wResult.textContent = wn === wordItems.length ? '' : `${wn}개`;
+    eResult.textContent = en === exprItems.length ? '' : `${en}개`;
+
+    const parts: string[] = [];
+    if (currentTab() !== 'words') parts.push(`t=${currentTab()}`);
+    if (q) parts.push(`q=${encodeURIComponent(q)}`);
+    if (!catItems.every(on)) parts.push(`c=${[...cats].map(encodeURIComponent).join(',')}`);
+    history.replaceState(null, '', parts.length ? `#${parts.join('&')}` : location.pathname);
+  };
+
+  const selectTab = (id: string) => {
+    for (const t of tabs) {
+      const active = t.dataset.tab === id;
+      t.setAttribute('aria-selected', String(active));
+      const panel = document.getElementById(`panel-${t.dataset.tab}`);
+      if (panel) panel.hidden = !active;
+    }
+  };
+
+  for (const t of tabs) {
+    t.addEventListener('click', () => {
+      selectTab(t.dataset.tab!);
+      apply();
+    });
+  }
+  catAll.addEventListener('click', () => {
+    const every = catItems.every(on);
+    for (const b of catItems) set(b, !every);
+    apply();
+  });
+  for (const b of catItems) {
+    b.addEventListener('click', () => {
+      set(b, !on(b));
+      apply();
+    });
+  }
+  search.addEventListener('input', apply);
+
+  const params = new URLSearchParams(location.hash.slice(1));
+  if (params.get('t') === 'expr') selectTab('expr');
+  if (params.get('q')) search.value = params.get('q')!;
+  if (params.get('c')) {
+    const want = new Set(params.get('c')!.split(',').map(decodeURIComponent));
+    for (const b of catItems) set(b, want.has(b.dataset.value!));
+  }
+  apply();
+</script>
+
+<style>
+  .search {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-sans);
+    margin-bottom: 0.5rem;
+  }
+  .search input {
+    font: inherit;
+    font-size: 0.95rem;
+    padding: 0.4rem 0.7rem;
+    border: 1px solid var(--color-line);
+    border-radius: 999px;
+    background: var(--color-card);
+    color: var(--color-fg);
+    width: min(100%, 22rem);
+  }
+  .search input:focus {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+  }
+  .entries {
+    display: grid;
+    gap: 0.35rem;
+  }
+  .entry {
+    padding: 0.5rem 0.75rem;
+  }
+  .entry__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.3rem 0.6rem;
+  }
+  .cn {
+    font-size: 1.15rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .pinyin {
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+  }
+  .kr {
+    flex: 1;
+    min-width: 8rem;
+  }
+  .docs {
+    font-family: var(--font-sans);
+    margin-left: auto;
+  }
+  .note,
+  .alts,
+  .example {
+    margin: 0.2rem 0 0;
+  }
+  .example {
+    border-left: 2px solid var(--color-line);
+    padding-left: 0.6rem;
+  }
+</style>

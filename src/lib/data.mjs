@@ -31,6 +31,8 @@ export const loadOperators = () => loadJson('operators.json');
 export const loadTimeline = () => loadJson('timeline.json');
 /** @returns {any} */
 export const loadMeta = () => loadJson('meta.json');
+/** @returns {any} */
+export const loadGlossary = () => loadJson('glossary.json');
 
 /** storyId → story */
 export function storyById(id) {

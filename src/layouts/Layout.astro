@@ -19,6 +19,7 @@ const NAV = [
   { href: '/timeline', label: '연표' },
   { href: '/story', label: '스토리' },
   { href: '/operator', label: '오퍼레이터' },
+  { href: '/glossary', label: '단어집' },
 ];
 const current = Astro.url.pathname;
 const isActive = (href: string) => (href === '/' ? current === '/' : current.startsWith(href));
