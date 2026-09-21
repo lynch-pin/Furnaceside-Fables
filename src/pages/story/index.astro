@@ -4,8 +4,8 @@
  *   보기 세 가지를 한 화면에서 전환한다. 카드는 한 벌만 그리고 JS 가 보기에 맞춰 다시 묶는다.
  *     - 목록:  종류별 (메인 / 사이드 / 미니 / 오퍼레이터 레코드)
  *     - 팩션:  지역별 (scripts/process-data.mjs 가 본문 언급으로 추정, overrides/regions.json 으로 수정)
- *     - 코드:  인게임 계열별 (RL 방주 / UR 들불 … stage_table.storylines). 메인은 '메인 스토리',
- *             계열이 없는 이벤트와 오퍼레이터 레코드는 '기타' 한 덩어리로.
+ *     - 계열:  인게임 계열별 (RL 방주 / UR 들불 … stage_table.storylines). 메인은 '메인 스토리',
+ *             콜라보는 '콜라보', 어디에도 없으면 '기타' 한 덩어리로. (오퍼레이터 레코드 제외)
  *   바로가기 목록도 보기에 따라 바뀐다. 검색은 현재 보기에만 걸린다.
  *
  * JS 가 없으면 종류별 기본 순서로 나열된다.
@@ -45,11 +45,13 @@ const regions = [...regionCount.entries()]
   .map(([key, count]) => ({ key, count }))
   .sort((a, b) => (a.key === UNKNOWN_REGION ? 1 : b.key === UNKNOWN_REGION ? -1 : b.count - a.count));
 
-// 바로가기: 인게임 계열 (메인 → 계열 순 → 기타)
+// 바로가기: 인게임 계열 (메인 → 계열 순 → 콜라보 → 기타). 오퍼레이터 레코드는 뺀다.
+const COLLAB_SERIES = 'collab';
 const OTHER_SERIES = 'other';
-const seriesOf = (g: any) => g.series ?? OTHER_SERIES;
+const seriesOf = (g: any) => (g.collab ? COLLAB_SERIES : (g.series ?? OTHER_SERIES));
 const seriesLabel = new Map<string, string>([
   ['main', '메인 스토리'],
+  [COLLAB_SERIES, '콜라보'],
   [OTHER_SERIES, '기타'],
   ...series.filter((s: any) => s.id !== 'main').map((s: any) => [s.id, s.name] as [string, string]),
 ]);
@@ -57,13 +59,14 @@ const seriesCode = new Map<string, string | null>(series.map((s: any) => [s.id, 
 const seriesOrder = [
   'main',
   ...series.filter((s: any) => s.id !== 'main').map((s: any) => s.id),
+  COLLAB_SERIES,
   OTHER_SERIES,
-].filter((id) => all.some((g: any) => seriesOf(g) === id));
+].filter((id) => events.some((g: any) => seriesOf(g) === id));
 const seriesNav = seriesOrder.map((id) => ({
   key: id,
   code: seriesCode.get(id) ?? null,
   label: seriesLabel.get(id) ?? id,
-  count: all.filter((g: any) => seriesOf(g) === id).length,
+  count: events.filter((g: any) => seriesOf(g) === id).length,
 }));
 ---
 
@@ -203,8 +206,8 @@ const seriesNav = seriesOrder.map((id) => ({
   const render = () => {
     const v = view();
     const q = search.value.trim().toLowerCase();
-    // 이 보기에 넣을 카드 고르기 (팩션 보기는 지역이 있는 이벤트만)
-    const picked = cards.filter((c) => (v !== 'region' || c.dataset.event === '1') && (!q || (c.dataset.name ?? '').includes(q)));
+    // 이 보기에 넣을 카드 고르기 (팩션·계열 보기는 이벤트만 — 오퍼레이터 레코드 제외)
+    const picked = cards.filter((c) => (v === 'kind' || c.dataset.event === '1') && (!q || (c.dataset.name ?? '').includes(q)));
 
     const buckets = new Map<string, HTMLElement[]>();
     for (const c of picked) {
@@ -224,7 +227,7 @@ const seriesNav = seriesOrder.map((id) => ({
     const frag = document.createDocumentFragment();
     for (const key of keys) {
       const list = buckets.get(key)!.sort((a, b) =>
-        v === 'series' && key !== 'other' && key !== 'main'
+        v === 'series' && key.startsWith('ssLine_')
           ? Number(a.dataset.seriesSort) - Number(b.dataset.seriesSort)
           : order.get(a)! - order.get(b)!,
       );
