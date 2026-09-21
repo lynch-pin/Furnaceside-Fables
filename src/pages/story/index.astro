@@ -1,9 +1,13 @@
 ---
 /**
- * /story — 스토리 목록 (그룹별, 썸네일 포함)
- *   - 목록 보기(종류별) / 팩션별 보기(지역별) 전환, 이벤트 이름 검색
- *   - 지역은 scripts/process-data.mjs 가 본문의 지역 언급으로 추정한다 (overrides/regions.json 으로 수정 가능)
- * TODO(story-list): 스토리 제목까지 검색 확장.
+ * /story — 스토리 목록.
+ *   보기 세 가지를 한 화면에서 전환한다. 카드는 한 벌만 그리고 JS 가 보기에 맞춰 다시 묶는다.
+ *     - 목록:  종류별 (메인 / 사이드 / 미니 / 오퍼레이터 레코드)
+ *     - 팩션:  지역별 (scripts/process-data.mjs 가 본문 언급으로 추정, overrides/regions.json 으로 수정)
+ *     - 코드:  스테이지 코드 접두사별 (TW, NL, R8 …)
+ *   바로가기 목록도 보기에 따라 바뀐다. 검색은 현재 보기에만 걸린다.
+ *
+ * JS 가 없으면 종류별 기본 순서로 나열된다.
  */
 import Layout from '../../layouts/Layout.astro';
 import SourceBadge from '../../components/SourceBadge.astro';
@@ -12,168 +16,227 @@ import { loadStories, KIND_LABEL } from '../../lib/data.mjs';
 const { groups, stories } = loadStories();
 const storyMap = new Map(stories.map((s) => [s.id, s]));
 
-// 팩션별 보기: 대표 지역(regions[0]) 으로 묶고, 이벤트가 많은 지역부터
-const eventGroups = groups.filter((g) => g.kind !== 'record' && g.storyIds.length);
-const UNKNOWN_REGION = '미분류';
-const byRegion = new Map<string, typeof groups>();
-for (const g of eventGroups) {
-  const key = g.regions?.[0]?.name ?? UNKNOWN_REGION;
-  if (!byRegion.has(key)) byRegion.set(key, []);
-  byRegion.get(key)!.push(g);
-}
-const regions = [...byRegion.entries()]
-  .map(([name, list]) => ({ name, list: list.sort((a: any, b: any) => a.timestamp - b.timestamp) }))
-  .sort((a, b) => (a.name === UNKNOWN_REGION ? 1 : b.name === UNKNOWN_REGION ? -1 : b.list.length - a.list.length));
+const KIND_ORDER = ['main', 'side', 'mini', 'record', 'other'];
+const all = groups
+  .filter((g) => g.storyIds.length)
+  .sort(
+    (a, b) =>
+      KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind) ||
+      (a.kind === 'record' ? a.name.localeCompare(b.name, 'ko') : a.timestamp - b.timestamp),
+  );
+const events = all.filter((g) => g.kind !== 'record');
 
-const ORDER = ['main', 'side', 'mini', 'record', 'other'];
-const sections = ORDER.map((kind) => ({
-  kind,
-  label: KIND_LABEL[kind],
-  groups: groups
-    .filter((g) => g.kind === kind && g.storyIds.length)
-    .sort((a, b) => (kind === 'record' ? a.name.localeCompare(b.name, 'ko') : a.timestamp - b.timestamp)),
-})).filter((s) => s.groups.length);
+// 바로가기: 종류
+const kinds = KIND_ORDER.filter((k) => all.some((g) => g.kind === k)).map((k) => ({
+  key: k,
+  label: KIND_LABEL[k],
+  count: all.filter((g) => g.kind === k).length,
+}));
+
+// 바로가기: 지역 (이벤트가 많은 지역부터, 미분류는 뒤)
+const UNKNOWN_REGION = '미분류';
+const regionCount = new Map<string, number>();
+for (const g of events) {
+  const key = g.regions?.[0]?.name ?? UNKNOWN_REGION;
+  regionCount.set(key, (regionCount.get(key) ?? 0) + 1);
+}
+const regions = [...regionCount.entries()]
+  .map(([key, count]) => ({ key, count }))
+  .sort((a, b) => (a.key === UNKNOWN_REGION ? 1 : b.key === UNKNOWN_REGION ? -1 : b.count - a.count));
+
+// 바로가기: 코드 (메인은 숫자순, 나머지는 알파벳순, 코드 없는 것은 뒤)
+const NO_CODE = '코드 없음';
+const codeOf = (g: any) => g.code ?? NO_CODE;
+const codes = [...new Set(events.map(codeOf))].sort((a, b) => {
+  if (a === NO_CODE) return 1;
+  if (b === NO_CODE) return -1;
+  const na = Number(a.replace(/\D/g, '')), nb = Number(b.replace(/\D/g, ''));
+  const aNum = /^\d+$|^R\d+$/.test(a), bNum = /^\d+$|^R\d+$/.test(b);
+  if (aNum && bNum) return na - nb;
+  if (aNum) return -1;
+  if (bNum) return 1;
+  return a.localeCompare(b);
+});
+const codeEvents = codes.map((c) => ({ key: c, list: events.filter((g) => codeOf(g) === c) }));
+const codeIndex = new Map(codes.map((c, i) => [c, i]));
 ---
 
 <Layout title="스토리">
   <div class="container">
     <h1>스토리</h1>
+
     <label class="search">
       <span class="shortcuts__label">검색</span>
-      <input type="search" id="story-search" placeholder="이벤트 이름" autocomplete="off" />
+      <input type="search" id="story-search" placeholder="이벤트 이름 / 코드" autocomplete="off" />
     </label>
+
     <div class="shortcuts" role="group" aria-label="보기" id="view-toggle">
       <span class="shortcuts__label">보기</span>
-      <button type="button" data-view="list" aria-pressed="true">목록</button>
-      <button type="button" data-view="faction" aria-pressed="false">팩션별</button>
+      <button type="button" data-view="kind" aria-pressed="true">목록</button>
+      <button type="button" data-view="region" aria-pressed="false">팩션</button>
+      <button type="button" data-view="code" aria-pressed="false">코드</button>
     </div>
 
-    <nav class="shortcuts view view--list" aria-label="종류">
-      {sections.map((s) => (
-        <a href={`#k-${s.kind}`}>{s.label} <span class="muted small">{s.groups.length}</span></a>
-      ))}
+    <nav class="shortcuts jump jump--kind" aria-label="종류">
+      {kinds.map((k) => <a href={`#s-${k.key}`}>{k.label} <span class="muted small">{k.count}</span></a>)}
     </nav>
-    <nav class="shortcuts view view--faction" aria-label="지역" hidden>
-      {regions.map((r) => (
-        <a href={`#f-${r.name}`}>{r.name} <span class="muted small">{r.list.length}</span></a>
-      ))}
+    <nav class="shortcuts jump jump--region" aria-label="지역" hidden>
+      {regions.map((r) => <a href={`#s-${r.key}`}>{r.key} <span class="muted small">{r.count}</span></a>)}
     </nav>
+    <nav class="shortcuts jump jump--code" aria-label="이벤트 코드" hidden>
+      {codeEvents.map((c) =>
+        c.list.map((g: any) => (
+          <a href={`#g-${g.id}`} title={g.name}>
+            {c.key !== NO_CODE && <span class="code">{c.key}</span>}
+            {g.name}
+          </a>
+        )),
+      )}
+    </nav>
+
     <p class="muted small" id="story-result"></p>
 
-    {sections.map((s) => (
-      <section id={`k-${s.kind}`} class="kind view view--list">
-        <h2>{s.label}</h2>
-        <div class="groups">
-          {s.groups.map((g) => (
-            <details class="card group" id={g.id} data-name={g.name.toLowerCase()}>
-              <summary>
-                {g.image ? <img class="group__thumb" src={g.image} alt="" loading="lazy" decoding="async" /> : <span class="group__thumb thumb--placeholder" />}
-                <span class="group__text">
-                  <span class="group__name">
-                    {g.chapter && <span class="badge">{g.chapter.label}</span>}
-                    {g.name}
-                    {g.collab && <span class="badge badge--collab">콜라보 · {g.collab}</span>}
-                    <SourceBadge locale={g.sourceLocale} translated={g.translated} />
-                  </span>
-                  <span class="muted small">{g.date ?? ''} · {g.storyIds.length}편</span>
-                </span>
-              </summary>
-              <ol class="list-plain">
-                {g.storyIds.map((id) => {
-                  const st = storyMap.get(id)!;
-                  return (
-                    <li class="story-row">
-                      {st.available ? (
-                        <a href={`/story/${st.id}`}>
-                          {st.code && <span class="code">{st.code}</span>} {st.name}
-                        </a>
-                      ) : (
-                        <span class="muted">{st.code && <span class="code">{st.code}</span>} {st.name} (원문 없음)</span>
-                      )}
-                      {st.avgTag && <span class="muted small"> · {st.avgTag}</span>}
-                      {' '}<SourceBadge locale={st.locale} translated={st.translated} />
-                    </li>
-                  );
-                })}
-              </ol>
-            </details>
-          ))}
-        </div>
-      </section>
-    ))}
-    {regions.map((r) => (
-      <section id={`f-${r.name}`} class="kind view view--faction" hidden>
-        <h2>{r.name} <span class="muted small">{r.list.length}</span></h2>
-        <div class="groups">
-          {r.list.map((g: any) => (
-            <details class="card group" data-name={g.name.toLowerCase()}>
-              <summary>
-                {g.image ? <img class="group__thumb" src={g.image} alt="" loading="lazy" decoding="async" /> : <span class="group__thumb thumb--placeholder" />}
-                <span class="group__text">
-                  <span class="group__name">
-                    <span class="badge">{KIND_LABEL[g.kind]}</span>
-                    {g.name}
-                    {g.collab && <span class="badge badge--collab">콜라보 · {g.collab}</span>}
-                    <SourceBadge locale={g.sourceLocale} translated={g.translated} />
-                  </span>
-                  <span class="muted small">
-                    {g.date ?? ''} · {g.storyIds.length}편
-                    {g.regions?.length > 1 && ` · ${g.regions.slice(1).map((x: any) => x.name).join(', ')}`}
-                  </span>
-                </span>
-              </summary>
-              <ol class="list-plain">
-                {g.storyIds.map((id: string) => {
-                  const st = storyMap.get(id)!;
-                  return (
-                    <li class="story-row">
-                      {st.available ? (
-                        <a href={`/story/${st.id}`}>
-                          {st.code && <span class="code">{st.code}</span>} {st.name}
-                        </a>
-                      ) : (
-                        <span class="muted">{st.code && <span class="code">{st.code}</span>} {st.name} (원문 없음)</span>
-                      )}
-                      {st.avgTag && <span class="muted small"> · {st.avgTag}</span>}
-                    </li>
-                  );
-                })}
-              </ol>
-            </details>
-          ))}
-        </div>
-      </section>
-    ))}
+    <div id="story-list" class="groups">
+      {all.map((g: any) => (
+        <details
+          class="card group"
+          id={`g-${g.id}`}
+          data-id={g.id}
+          data-kind={g.kind}
+          data-event={g.kind === 'record' ? '0' : '1'}
+          data-region={g.regions?.[0]?.name ?? UNKNOWN_REGION}
+          data-code={codeOf(g)}
+          data-code-index={g.kind === 'record' ? '' : String(codeIndex.get(codeOf(g)) ?? 999)}
+          data-name={`${g.name} ${g.code ?? ''}`.toLowerCase()}
+        >
+          <summary>
+            {g.image ? <img class="group__thumb" src={g.image} alt="" loading="lazy" decoding="async" /> : <span class="group__thumb thumb--placeholder" />}
+            <span class="group__text">
+              <span class="group__name">
+                {g.code && <span class="code">{g.code}</span>}
+                {g.chapter && <span class="badge">{g.chapter.label}</span>}
+                {g.name}
+                {g.collab && <span class="badge badge--collab">콜라보 · {g.collab}</span>}
+                <SourceBadge locale={g.sourceLocale} translated={g.translated} />
+              </span>
+              <span class="muted small">
+                {[
+                  KIND_LABEL[g.kind],
+                  g.date ?? null,
+                  `${g.storyIds.length}편`,
+                  g.kind !== 'record' && g.regions?.length ? g.regions.map((r: any) => r.name).join(', ') : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+            </span>
+          </summary>
+          <ol class="list-plain">
+            {g.storyIds.map((id: string) => {
+              const st = storyMap.get(id)!;
+              return (
+                <li class="story-row">
+                  {st.available ? (
+                    <a href={`/story/${st.id}`}>
+                      {st.code && <span class="code">{st.code}</span>} {st.name}
+                    </a>
+                  ) : (
+                    <span class="muted">{st.code && <span class="code">{st.code}</span>} {st.name} (원문 없음)</span>
+                  )}
+                  {st.avgTag && <span class="muted small"> · {st.avgTag}</span>}
+                  {' '}<SourceBadge locale={st.locale} translated={st.translated} />
+                </li>
+              );
+            })}
+          </ol>
+        </details>
+      ))}
+    </div>
   </div>
 </Layout>
 
 <script>
-  // 이벤트 이름 검색 (부분 일치). 결과가 없는 종류 섹션은 숨긴다. 검색어는 URL 해시(#q=…)에 저장.
-  const input = document.getElementById('story-search') as HTMLInputElement;
+  // 보기 전환: 카드를 다시 배치하고 구역 제목을 새로 만든다. 상태는 URL 해시(#v=region&q=…).
+  const KIND_LABEL: Record<string, string> = {
+    main: '메인 스토리',
+    side: '사이드 스토리',
+    mini: '미니 스토리',
+    record: '오퍼레이터 레코드',
+    other: '기타',
+  };
+  const container = document.getElementById('story-list')!;
+  const search = document.getElementById('story-search') as HTMLInputElement;
   const result = document.getElementById('story-result')!;
   const viewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-view]'));
-  const views = Array.from(document.querySelectorAll<HTMLElement>('.view'));
-  const currentView = () => viewButtons.find((b) => b.getAttribute('aria-pressed') === 'true')!.dataset.view!;
+  const jumps = Array.from(document.querySelectorAll<HTMLElement>('.jump'));
+  const cards = Array.from(container.querySelectorAll<HTMLElement>('.group'));
+  // 서버가 그린 순서(종류 → 시간)를 기억해 두고, 보기마다 이 순서 안에서 다시 묶는다
+  const order = new Map(cards.map((c, i) => [c, i]));
+  const view = () => viewButtons.find((b) => b.getAttribute('aria-pressed') === 'true')!.dataset.view!;
 
-  const apply = () => {
-    const view = currentView();
-    const q = input.value.trim().toLowerCase();
-    // 지금 보고 있는 뷰만 표시하고, 그 안에서 검색어로 거른다
-    for (const el of views) el.hidden = !el.classList.contains(`view--${view}`);
-    let visible = 0;
-    for (const sec of Array.from(document.querySelectorAll<HTMLElement>(`.kind.view--${view}`))) {
-      let n = 0;
-      for (const g of Array.from(sec.querySelectorAll<HTMLElement>('.group'))) {
-        const show = !q || (g.dataset.name ?? '').includes(q);
-        g.hidden = !show;
-        if (show) n++;
-      }
-      sec.hidden = n === 0;
-      visible += n;
+  const keyOf = (card: HTMLElement, v: string) =>
+    v === 'kind' ? card.dataset.kind! : v === 'region' ? card.dataset.region! : card.dataset.code!;
+  const labelOf = (key: string, v: string) => (v === 'kind' ? (KIND_LABEL[key] ?? key) : key);
+
+  const render = () => {
+    const v = view();
+    const q = search.value.trim().toLowerCase();
+    // 이 보기에 넣을 카드 고르기 (팩션·코드 보기는 이벤트만)
+    const picked = cards.filter((c) => (v === 'kind' || c.dataset.event === '1') && (!q || (c.dataset.name ?? '').includes(q)));
+
+    // 코드 보기: 구역을 나누지 않고 코드 순서대로 한 줄로 늘어놓는다 (바로가기로 개별 이벤트로 이동)
+    if (v === 'code') {
+      const sorted = picked.sort(
+        (a, b) => Number(a.dataset.codeIndex) - Number(b.dataset.codeIndex) || order.get(a)! - order.get(b)!,
+      );
+      const box = document.createElement('div');
+      box.className = 'groups';
+      box.append(...sorted);
+      container.replaceChildren(box);
+      for (const el of jumps) el.hidden = !el.classList.contains('jump--code');
+      result.textContent = q ? `${picked.length}개` : '';
+      const p: string[] = ['v=code'];
+      if (q) p.push(`q=${encodeURIComponent(q)}`);
+      history.replaceState(null, '', `#${p.join('&')}`);
+      return;
     }
-    result.textContent = q ? `${visible}개 이벤트` : '';
+
+    const buckets = new Map<string, HTMLElement[]>();
+    for (const c of picked) {
+      const k = keyOf(c, v);
+      if (!buckets.has(k)) buckets.set(k, []);
+      buckets.get(k)!.push(c);
+    }
+    // 구역 순서는 바로가기 목록과 같게 맞춘다
+    const navKeys = Array.from(document.querySelectorAll<HTMLAnchorElement>(`.jump--${v} a`)).map((a) =>
+      decodeURIComponent(a.getAttribute('href')!.slice(3)),
+    );
+    const keys = [...buckets.keys()].sort((a, b) => {
+      const ia = navKeys.indexOf(a), ib = navKeys.indexOf(b);
+      return (ia < 0 ? 1e9 : ia) - (ib < 0 ? 1e9 : ib);
+    });
+
+    const frag = document.createDocumentFragment();
+    for (const key of keys) {
+      const list = buckets.get(key)!.sort((a, b) => order.get(a)! - order.get(b)!);
+      const section = document.createElement('section');
+      section.className = 'section';
+      section.id = `s-${key}`;
+      const h = document.createElement('h2');
+      h.innerHTML = `${labelOf(key, v)} <span class="muted small">${list.length}</span>`;
+      section.append(h);
+      const box = document.createElement('div');
+      box.className = 'groups';
+      box.append(...list);
+      section.append(box);
+      frag.append(section);
+    }
+    container.replaceChildren(frag);
+
+    for (const el of jumps) el.hidden = !el.classList.contains(`jump--${v}`);
+    result.textContent = q ? `${picked.length}개` : '';
     const parts: string[] = [];
-    if (view !== 'list') parts.push(`v=${view}`);
+    if (v !== 'kind') parts.push(`v=${v}`);
     if (q) parts.push(`q=${encodeURIComponent(q)}`);
     history.replaceState(null, '', parts.length ? `#${parts.join('&')}` : location.pathname);
   };
@@ -181,17 +244,24 @@ const sections = ORDER.map((kind) => ({
   for (const b of viewButtons) {
     b.addEventListener('click', () => {
       for (const o of viewButtons) o.setAttribute('aria-pressed', String(o === b));
-      apply();
+      render();
     });
   }
-  input.addEventListener('input', apply);
+  search.addEventListener('input', render);
 
   const params = new URLSearchParams(location.hash.slice(1));
-  if (params.get('v') === 'faction') {
-    for (const b of viewButtons) b.setAttribute('aria-pressed', String(b.dataset.view === 'faction'));
+  const wanted = params.get('v');
+  if (wanted === 'region' || wanted === 'code') {
+    for (const b of viewButtons) b.setAttribute('aria-pressed', String(b.dataset.view === wanted));
   }
-  if (params.get('q')) input.value = params.get('q')!;
-  apply();
+  if (params.get('q')) search.value = params.get('q')!;
+  render();
+  // 코드 보기의 바로가기는 개별 이벤트로 이동하므로, 해시로 들어온 경우 위치를 맞춰 준다
+  const target = location.hash.startsWith('#g-') && document.getElementById(location.hash.slice(1));
+  if (target instanceof HTMLDetailsElement) {
+    target.open = true;
+    target.scrollIntoView();
+  }
 </script>
 
 <style>
@@ -200,7 +270,7 @@ const sections = ORDER.map((kind) => ({
     align-items: center;
     gap: 0.5rem;
     font-family: var(--font-sans);
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.5rem;
   }
   .search input {
     font: inherit;
@@ -215,6 +285,13 @@ const sections = ORDER.map((kind) => ({
   .search input:focus {
     outline: 2px solid var(--color-accent);
     outline-offset: 1px;
+  }
+  .jump {
+    max-height: 7.5rem;
+    overflow-y: auto;
+  }
+  .jump--code a {
+    font-size: 0.85rem;
   }
   .groups {
     display: grid;
@@ -242,9 +319,14 @@ const sections = ORDER.map((kind) => ({
     display: flex;
     flex-direction: column;
     gap: 0.15rem;
+    min-width: 0;
   }
   .group__name {
     font-weight: 600;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem 0.5rem;
   }
   .group ol {
     margin-top: 0.75rem;
@@ -258,6 +340,5 @@ const sections = ORDER.map((kind) => ({
     font-family: var(--font-sans);
     font-size: 0.8rem;
     color: var(--color-accent);
-    margin-right: 0.25rem;
   }
 </style>

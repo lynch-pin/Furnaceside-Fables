@@ -481,6 +481,18 @@ for (const groupId of unionKeys(storyReview)) {
     group.storyIds.push(storyId);
   }
 
+  // 스테이지 코드 접두사 (TW, NL, R8 …). 소속 스토리의 코드에서 가장 많이 쓰인 것.
+  {
+    const cnt = {};
+    for (const sid of group.storyIds) {
+      const c = storyIndex.get(sid)?.code;
+      const prefix = c ? String(c).split('-')[0].trim() : null;
+      if (prefix) cnt[prefix] = (cnt[prefix] ?? 0) + 1;
+    }
+    const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
+    group.code = top ? top[0] : null;
+  }
+
   // 지역: 가장 많이 언급된 것부터. 으뜸의 40% 이상인 것까지만 남긴다 (최대 3개)
   {
     const sorted = Object.entries(regionCounts).sort((a, b) => b[1] - a[1]);
