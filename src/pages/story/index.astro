@@ -1,7 +1,8 @@
 ---
 /**
  * /story — 스토리 목록 (그룹별, 썸네일 포함)
- *   - 이벤트 이름 검색 (클라이언트)
+ *   - 목록 보기(종류별) / 팩션별 보기(지역별) 전환, 이벤트 이름 검색
+ *   - 지역은 scripts/process-data.mjs 가 본문의 지역 언급으로 추정한다 (overrides/regions.json 으로 수정 가능)
  * TODO(story-list): 스토리 제목까지 검색 확장.
  */
 import Layout from '../../layouts/Layout.astro';
@@ -10,6 +11,19 @@ import { loadStories, KIND_LABEL } from '../../lib/data.mjs';
 
 const { groups, stories } = loadStories();
 const storyMap = new Map(stories.map((s) => [s.id, s]));
+
+// 팩션별 보기: 대표 지역(regions[0]) 으로 묶고, 이벤트가 많은 지역부터
+const eventGroups = groups.filter((g) => g.kind !== 'record' && g.storyIds.length);
+const UNKNOWN_REGION = '미분류';
+const byRegion = new Map<string, typeof groups>();
+for (const g of eventGroups) {
+  const key = g.regions?.[0]?.name ?? UNKNOWN_REGION;
+  if (!byRegion.has(key)) byRegion.set(key, []);
+  byRegion.get(key)!.push(g);
+}
+const regions = [...byRegion.entries()]
+  .map(([name, list]) => ({ name, list: list.sort((a: any, b: any) => a.timestamp - b.timestamp) }))
+  .sort((a, b) => (a.name === UNKNOWN_REGION ? 1 : b.name === UNKNOWN_REGION ? -1 : b.list.length - a.list.length));
 
 const ORDER = ['main', 'side', 'mini', 'record', 'other'];
 const sections = ORDER.map((kind) => ({
@@ -28,15 +42,26 @@ const sections = ORDER.map((kind) => ({
       <span class="shortcuts__label">검색</span>
       <input type="search" id="story-search" placeholder="이벤트 이름" autocomplete="off" />
     </label>
-    <nav class="shortcuts" aria-label="종류">
+    <div class="shortcuts" role="group" aria-label="보기" id="view-toggle">
+      <span class="shortcuts__label">보기</span>
+      <button type="button" data-view="list" aria-pressed="true">목록</button>
+      <button type="button" data-view="faction" aria-pressed="false">팩션별</button>
+    </div>
+
+    <nav class="shortcuts view view--list" aria-label="종류">
       {sections.map((s) => (
         <a href={`#k-${s.kind}`}>{s.label} <span class="muted small">{s.groups.length}</span></a>
+      ))}
+    </nav>
+    <nav class="shortcuts view view--faction" aria-label="지역" hidden>
+      {regions.map((r) => (
+        <a href={`#f-${r.name}`}>{r.name} <span class="muted small">{r.list.length}</span></a>
       ))}
     </nav>
     <p class="muted small" id="story-result"></p>
 
     {sections.map((s) => (
-      <section id={`k-${s.kind}`} class="kind">
+      <section id={`k-${s.kind}`} class="kind view view--list">
         <h2>{s.label}</h2>
         <div class="groups">
           {s.groups.map((g) => (
@@ -76,6 +101,49 @@ const sections = ORDER.map((kind) => ({
         </div>
       </section>
     ))}
+    {regions.map((r) => (
+      <section id={`f-${r.name}`} class="kind view view--faction" hidden>
+        <h2>{r.name} <span class="muted small">{r.list.length}</span></h2>
+        <div class="groups">
+          {r.list.map((g: any) => (
+            <details class="card group" data-name={g.name.toLowerCase()}>
+              <summary>
+                {g.image ? <img class="group__thumb" src={g.image} alt="" loading="lazy" decoding="async" /> : <span class="group__thumb thumb--placeholder" />}
+                <span class="group__text">
+                  <span class="group__name">
+                    <span class="badge">{KIND_LABEL[g.kind]}</span>
+                    {g.name}
+                    {g.collab && <span class="badge badge--collab">콜라보 · {g.collab}</span>}
+                    <SourceBadge locale={g.sourceLocale} translated={g.translated} />
+                  </span>
+                  <span class="muted small">
+                    {g.date ?? ''} · {g.storyIds.length}편
+                    {g.regions?.length > 1 && ` · ${g.regions.slice(1).map((x: any) => x.name).join(', ')}`}
+                  </span>
+                </span>
+              </summary>
+              <ol class="list-plain">
+                {g.storyIds.map((id: string) => {
+                  const st = storyMap.get(id)!;
+                  return (
+                    <li class="story-row">
+                      {st.available ? (
+                        <a href={`/story/${st.id}`}>
+                          {st.code && <span class="code">{st.code}</span>} {st.name}
+                        </a>
+                      ) : (
+                        <span class="muted">{st.code && <span class="code">{st.code}</span>} {st.name} (원문 없음)</span>
+                      )}
+                      {st.avgTag && <span class="muted small"> · {st.avgTag}</span>}
+                    </li>
+                  );
+                })}
+              </ol>
+            </details>
+          ))}
+        </div>
+      </section>
+    ))}
   </div>
 </Layout>
 
@@ -83,12 +151,17 @@ const sections = ORDER.map((kind) => ({
   // 이벤트 이름 검색 (부분 일치). 결과가 없는 종류 섹션은 숨긴다. 검색어는 URL 해시(#q=…)에 저장.
   const input = document.getElementById('story-search') as HTMLInputElement;
   const result = document.getElementById('story-result')!;
-  const sections = Array.from(document.querySelectorAll<HTMLElement>('.kind'));
-  const groups = Array.from(document.querySelectorAll<HTMLElement>('.group'));
+  const viewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-view]'));
+  const views = Array.from(document.querySelectorAll<HTMLElement>('.view'));
+  const currentView = () => viewButtons.find((b) => b.getAttribute('aria-pressed') === 'true')!.dataset.view!;
+
   const apply = () => {
+    const view = currentView();
     const q = input.value.trim().toLowerCase();
+    // 지금 보고 있는 뷰만 표시하고, 그 안에서 검색어로 거른다
+    for (const el of views) el.hidden = !el.classList.contains(`view--${view}`);
     let visible = 0;
-    for (const sec of sections) {
+    for (const sec of Array.from(document.querySelectorAll<HTMLElement>(`.kind.view--${view}`))) {
       let n = 0;
       for (const g of Array.from(sec.querySelectorAll<HTMLElement>('.group'))) {
         const show = !q || (g.dataset.name ?? '').includes(q);
@@ -99,14 +172,26 @@ const sections = ORDER.map((kind) => ({
       visible += n;
     }
     result.textContent = q ? `${visible}개 이벤트` : '';
-    history.replaceState(null, '', q ? `#q=${encodeURIComponent(q)}` : location.pathname);
+    const parts: string[] = [];
+    if (view !== 'list') parts.push(`v=${view}`);
+    if (q) parts.push(`q=${encodeURIComponent(q)}`);
+    history.replaceState(null, '', parts.length ? `#${parts.join('&')}` : location.pathname);
   };
-  input.addEventListener('input', apply);
-  const m = new URLSearchParams(location.hash.slice(1)).get('q');
-  if (m) {
-    input.value = m;
-    apply();
+
+  for (const b of viewButtons) {
+    b.addEventListener('click', () => {
+      for (const o of viewButtons) o.setAttribute('aria-pressed', String(o === b));
+      apply();
+    });
   }
+  input.addEventListener('input', apply);
+
+  const params = new URLSearchParams(location.hash.slice(1));
+  if (params.get('v') === 'faction') {
+    for (const b of viewButtons) b.setAttribute('aria-pressed', String(b.dataset.view === 'faction'));
+  }
+  if (params.get('q')) input.value = params.get('q')!;
+  apply();
 </script>
 
 <style>

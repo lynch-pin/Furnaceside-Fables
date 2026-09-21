@@ -199,6 +199,45 @@ const zoneInfo = (groupId) => pick(byLocale(zone, 'zones', groupId)).value ?? nu
 
 const KIND_BY_ENTRY = { MAINLINE: 'main', ACTIVITY: 'side', MINI_ACTIVITY: 'mini', NONE: 'record' };
 
+// ---------------------------------------------------------------------------
+// 지역·세력 추정
+// ---------------------------------------------------------------------------
+/**
+ * 게임 데이터에는 이벤트가 어느 지역 이야기인지 알려 주는 항목이 없다.
+ * 대신 스토리 본문에서 지역 이름이 몇 번 나오는지 세어 추정한다. (한국어/중국어 표기 모두)
+ * overrides/regions.json 으로 직접 지정하면 그 값이 우선한다.
+ */
+const REGION_WORDS = {
+  라이타니엔: ['라이타니엔', '莱塔尼亚', '월루몽드', '沃伦姆德'],
+  우르수스: ['우르수스', '乌萨斯', '체르노보그', '切尔诺伯格'],
+  빅토리아: ['빅토리아', '维多利亚', '런디니움', '伦蒂尼姆'],
+  컬럼비아: ['컬럼비아', '哥伦比亚'],
+  이베리아: ['이베리아', '伊比利亚'],
+  카시미어: ['카시미어', '卡西米尔'],
+  시라쿠사: ['시라쿠사', '叙拉古'],
+  라테라노: ['라테라노', '拉特兰'],
+  쉐라그: ['쉐라그', '谢拉格'],
+  사미: ['사미', '萨米'],
+  사르곤: ['사르곤', '萨尔贡'],
+  '림 빌리턴': ['림 빌리턴', '雷姆必拓'],
+  볼리바르: ['볼리바르', '玻利瓦尔', '도솔레스', '多索雷斯'],
+  미노스: ['미노스', '米诺斯'],
+  에기르: ['에기르', '阿戈尔'],
+  염국: ['염국', '炎国'],
+  룽먼: ['룽먼', '龙门'],
+  카즈델: ['카즈델', '卡兹戴尔'],
+  극동: ['극동', '东国'],
+};
+
+/** 한 편의 본문에서 지역 언급 수를 센다 */
+function countRegions(text, into) {
+  for (const [region, words] of Object.entries(REGION_WORDS)) {
+    let n = 0;
+    for (const w of words) n += text.split(w).length - 1;
+    if (n) into[region] = (into[region] ?? 0) + n;
+  }
+}
+
 // 썸네일로 쓰기에 무의미한 배경 (검정/흰색/단색 화면)
 const GENERIC_BG_RE = /^(bg_)?(black|white|dark|grey|gray|blank|empty|none)(_|\d|$)/i;
 const isGenericBg = (name) => !name || GENERIC_BG_RE.test(name);
@@ -332,6 +371,7 @@ for (const groupId of unionKeys(storyReview)) {
   };
 
   const groupImageCandidates = []; // [{cg, bg}] 소속 스토리 순서대로
+  const regionCounts = {}; // 지역 이름 → 언급 수
   // infoUnlockDatas 는 로케일별로 합집합 (storyId 기준, ko 우선)
   const unlockByLocale = byLocale(storyReview, groupId, 'infoUnlockDatas');
   const unlockMap = new Map();
@@ -361,6 +401,7 @@ for (const groupId of unionKeys(storyReview)) {
       const { lines, cast } = parseStoryWithMeta(script.text);
       lineCount = lines.length;
       years = extractYears(lines);
+      countRegions(stripRichText(script.text), regionCounts);
       if (hasScriptTranslation && script.locale === PRIMARY) staleTranslations.push(`stories/${storyId}`);
       // 썸네일 보충: 스크립트의 첫 CG(Image) → 단색이 아닌 첫 배경 → 아무 배경
       const cgs = lines.filter((l) => l.type === 'image' && l.image).map((l) => avgImage(l.image)).filter(Boolean);
@@ -440,6 +481,16 @@ for (const groupId of unionKeys(storyReview)) {
     group.storyIds.push(storyId);
   }
 
+  // 지역: 가장 많이 언급된 것부터. 으뜸의 40% 이상인 것까지만 남긴다 (최대 3개)
+  {
+    const sorted = Object.entries(regionCounts).sort((a, b) => b[1] - a[1]);
+    const top = sorted[0]?.[1] ?? 0;
+    group.regions = sorted
+      .filter(([, n]) => n >= Math.max(3, top * 0.4))
+      .slice(0, 3)
+      .map(([name, count]) => ({ name, count }));
+  }
+
   group.storyIds.sort((a, b) => storyIndex.get(a).sort - storyIndex.get(b).sort);
   // 그룹 대표 이미지 보충: 아카이브 KV → 소속 스토리의 첫 CG → 단색 아닌 첫 배경 → 스토리 이미지 아무 것
   if (!group.image) {
@@ -479,6 +530,21 @@ log('연표…');
  * overrides/timeline.json 형식은 overrides/README.md 참고.
  * TODO(timeline): meta.json 의 counts.timelineUnresolved 와 loreSource === null / 'text-weak' 항목을 보고 overrides 를 채울 것.
  */
+// 지역 수동 지정 (overrides/regions.json: { "<groupId>": ["카시미어", "라이타니엔"] })
+const regionOverridesFile = path.join(OVERRIDES_DIR, 'regions.json');
+if (fs.existsSync(regionOverridesFile)) {
+  const ro = JSON.parse(fs.readFileSync(regionOverridesFile, 'utf8'));
+  delete ro._comment;
+  let n = 0;
+  for (const g of groups) {
+    const list = ro[g.id];
+    if (!Array.isArray(list)) continue;
+    g.regions = list.map((name) => ({ name, count: null, manual: true }));
+    n++;
+  }
+  if (n) log(`  overrides/regions.json 적용 (${n}건)`);
+}
+
 let overrides = {};
 const overridesFile = path.join(OVERRIDES_DIR, 'timeline.json');
 if (fs.existsSync(overridesFile)) {

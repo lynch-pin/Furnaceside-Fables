@@ -113,6 +113,7 @@ npm run image -- search bg_lt        # 경로 검색
 | `TODO(site)` | astro.config.mjs | `site` 설정 (도메인 확정 후) |
 | `TODO(translate)` | src/lib/i18n.mjs, story/[id].astro, deploy.yml | 번역 API 연동 + 캐시 |
 | `TODO(timeline)` | scripts/process-data.mjs, timeline.astro | 세계관 연대 검수 (overrides/timeline.json) |
+| 지역 분류 | scripts/process-data.mjs (`REGION_WORDS`) | 본문 언급으로 추정, overrides/regions.json 으로 수정 |
 | `TODO(assets)` | src/lib/assets.mjs | 이미지 CDN / 셀프 호스팅 |
 | `TODO(style)` | src/styles/global.css | 디자인 |
 | `TODO(reader)` | StoryReader.astro | 배경/CG, 분기 접기, 폰트 크기 |
