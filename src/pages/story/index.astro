@@ -4,7 +4,8 @@
  *   보기 세 가지를 한 화면에서 전환한다. 카드는 한 벌만 그리고 JS 가 보기에 맞춰 다시 묶는다.
  *     - 목록:  종류별 (메인 / 사이드 / 미니 / 오퍼레이터 레코드)
  *     - 팩션:  지역별 (scripts/process-data.mjs 가 본문 언급으로 추정, overrides/regions.json 으로 수정)
- *     - 코드:  스테이지 코드 접두사별 (TW, NL, R8 …)
+ *     - 코드:  인게임 계열별 (RL 방주 / UR 들불 … stage_table.storylines). 메인은 '메인 스토리',
+ *             계열이 없는 이벤트와 오퍼레이터 레코드는 '기타' 한 덩어리로.
  *   바로가기 목록도 보기에 따라 바뀐다. 검색은 현재 보기에만 걸린다.
  *
  * JS 가 없으면 종류별 기본 순서로 나열된다.
@@ -13,7 +14,7 @@ import Layout from '../../layouts/Layout.astro';
 import SourceBadge from '../../components/SourceBadge.astro';
 import { loadStories, KIND_LABEL } from '../../lib/data.mjs';
 
-const { groups, stories } = loadStories();
+const { groups, stories, series } = loadStories();
 const storyMap = new Map(stories.map((s) => [s.id, s]));
 
 const KIND_ORDER = ['main', 'side', 'mini', 'record', 'other'];
@@ -44,21 +45,26 @@ const regions = [...regionCount.entries()]
   .map(([key, count]) => ({ key, count }))
   .sort((a, b) => (a.key === UNKNOWN_REGION ? 1 : b.key === UNKNOWN_REGION ? -1 : b.count - a.count));
 
-// 바로가기: 코드 (메인은 숫자순, 나머지는 알파벳순, 코드 없는 것은 뒤)
-const NO_CODE = '코드 없음';
-const codeOf = (g: any) => g.code ?? NO_CODE;
-const codes = [...new Set(events.map(codeOf))].sort((a, b) => {
-  if (a === NO_CODE) return 1;
-  if (b === NO_CODE) return -1;
-  const na = Number(a.replace(/\D/g, '')), nb = Number(b.replace(/\D/g, ''));
-  const aNum = /^\d+$|^R\d+$/.test(a), bNum = /^\d+$|^R\d+$/.test(b);
-  if (aNum && bNum) return na - nb;
-  if (aNum) return -1;
-  if (bNum) return 1;
-  return a.localeCompare(b);
-});
-const codeEvents = codes.map((c) => ({ key: c, list: events.filter((g) => codeOf(g) === c) }));
-const codeIndex = new Map(codes.map((c, i) => [c, i]));
+// 바로가기: 인게임 계열 (메인 → 계열 순 → 기타)
+const OTHER_SERIES = 'other';
+const seriesOf = (g: any) => g.series ?? OTHER_SERIES;
+const seriesLabel = new Map<string, string>([
+  ['main', '메인 스토리'],
+  [OTHER_SERIES, '기타'],
+  ...series.filter((s: any) => s.id !== 'main').map((s: any) => [s.id, s.name] as [string, string]),
+]);
+const seriesCode = new Map<string, string | null>(series.map((s: any) => [s.id, s.code]));
+const seriesOrder = [
+  'main',
+  ...series.filter((s: any) => s.id !== 'main').map((s: any) => s.id),
+  OTHER_SERIES,
+].filter((id) => all.some((g: any) => seriesOf(g) === id));
+const seriesNav = seriesOrder.map((id) => ({
+  key: id,
+  code: seriesCode.get(id) ?? null,
+  label: seriesLabel.get(id) ?? id,
+  count: all.filter((g: any) => seriesOf(g) === id).length,
+}));
 ---
 
 <Layout title="스토리">
@@ -74,7 +80,7 @@ const codeIndex = new Map(codes.map((c, i) => [c, i]));
       <span class="shortcuts__label">보기</span>
       <button type="button" data-view="kind" aria-pressed="true">목록</button>
       <button type="button" data-view="region" aria-pressed="false">팩션</button>
-      <button type="button" data-view="code" aria-pressed="false">코드</button>
+      <button type="button" data-view="series" aria-pressed="false">계열</button>
     </div>
 
     <nav class="shortcuts jump jump--kind" aria-label="종류">
@@ -83,15 +89,13 @@ const codeIndex = new Map(codes.map((c, i) => [c, i]));
     <nav class="shortcuts jump jump--region" aria-label="지역" hidden>
       {regions.map((r) => <a href={`#s-${r.key}`}>{r.key} <span class="muted small">{r.count}</span></a>)}
     </nav>
-    <nav class="shortcuts jump jump--code" aria-label="이벤트 코드" hidden>
-      {codeEvents.map((c) =>
-        c.list.map((g: any) => (
-          <a href={`#g-${g.id}`} title={g.name}>
-            {c.key !== NO_CODE && <span class="code">{c.key}</span>}
-            {g.name}
-          </a>
-        )),
-      )}
+    <nav class="shortcuts jump jump--series" aria-label="계열" hidden>
+      {seriesNav.map((s) => (
+        <a href={`#s-${s.key}`}>
+          {s.code && <span class="code">{s.code}</span>}
+          {s.label} <span class="muted small">{s.count}</span>
+        </a>
+      ))}
     </nav>
 
     <p class="muted small" id="story-result"></p>
@@ -105,8 +109,8 @@ const codeIndex = new Map(codes.map((c, i) => [c, i]));
           data-kind={g.kind}
           data-event={g.kind === 'record' ? '0' : '1'}
           data-region={g.regions?.[0]?.name ?? UNKNOWN_REGION}
-          data-code={codeOf(g)}
-          data-code-index={g.kind === 'record' ? '' : String(codeIndex.get(codeOf(g)) ?? 999)}
+          data-series={seriesOf(g)}
+          data-series-sort={String(g.seriesSort ?? 0)}
           data-name={`${g.name} ${g.code ?? ''}`.toLowerCase()}
         >
           <summary>
@@ -174,32 +178,33 @@ const codeIndex = new Map(codes.map((c, i) => [c, i]));
   const order = new Map(cards.map((c, i) => [c, i]));
   const view = () => viewButtons.find((b) => b.getAttribute('aria-pressed') === 'true')!.dataset.view!;
 
+  // 계열 보기의 구역 제목은 바로가기 칩(코드 + 이름)을 그대로 쓴다
+  const seriesChip = new Map<string, { code: string; name: string }>();
+  for (const a of document.querySelectorAll<HTMLAnchorElement>('.jump--series a')) {
+    const key = decodeURIComponent(a.getAttribute('href')!.slice(3));
+    const clone = a.cloneNode(true) as HTMLElement;
+    for (const el of clone.querySelectorAll('.code, .muted')) el.remove();
+    seriesChip.set(key, {
+      code: (a.querySelector('.code')?.textContent ?? '').trim(),
+      name: clone.textContent!.trim(),
+    });
+  }
+
   const keyOf = (card: HTMLElement, v: string) =>
-    v === 'kind' ? card.dataset.kind! : v === 'region' ? card.dataset.region! : card.dataset.code!;
-  const labelOf = (key: string, v: string) => (v === 'kind' ? (KIND_LABEL[key] ?? key) : key);
+    v === 'kind' ? card.dataset.kind! : v === 'region' ? card.dataset.region! : card.dataset.series!;
+  const labelOf = (key: string, v: string) => {
+    if (v === 'kind') return KIND_LABEL[key] ?? key;
+    if (v !== 'series') return key;
+    const chip = seriesChip.get(key);
+    if (!chip) return key;
+    return chip.code ? `<span class="code">${chip.code}</span> ${chip.name}` : chip.name;
+  };
 
   const render = () => {
     const v = view();
     const q = search.value.trim().toLowerCase();
-    // 이 보기에 넣을 카드 고르기 (팩션·코드 보기는 이벤트만)
-    const picked = cards.filter((c) => (v === 'kind' || c.dataset.event === '1') && (!q || (c.dataset.name ?? '').includes(q)));
-
-    // 코드 보기: 구역을 나누지 않고 코드 순서대로 한 줄로 늘어놓는다 (바로가기로 개별 이벤트로 이동)
-    if (v === 'code') {
-      const sorted = picked.sort(
-        (a, b) => Number(a.dataset.codeIndex) - Number(b.dataset.codeIndex) || order.get(a)! - order.get(b)!,
-      );
-      const box = document.createElement('div');
-      box.className = 'groups';
-      box.append(...sorted);
-      container.replaceChildren(box);
-      for (const el of jumps) el.hidden = !el.classList.contains('jump--code');
-      result.textContent = q ? `${picked.length}개` : '';
-      const p: string[] = ['v=code'];
-      if (q) p.push(`q=${encodeURIComponent(q)}`);
-      history.replaceState(null, '', `#${p.join('&')}`);
-      return;
-    }
+    // 이 보기에 넣을 카드 고르기 (팩션 보기는 지역이 있는 이벤트만)
+    const picked = cards.filter((c) => (v !== 'region' || c.dataset.event === '1') && (!q || (c.dataset.name ?? '').includes(q)));
 
     const buckets = new Map<string, HTMLElement[]>();
     for (const c of picked) {
@@ -218,7 +223,11 @@ const codeIndex = new Map(codes.map((c, i) => [c, i]));
 
     const frag = document.createDocumentFragment();
     for (const key of keys) {
-      const list = buckets.get(key)!.sort((a, b) => order.get(a)! - order.get(b)!);
+      const list = buckets.get(key)!.sort((a, b) =>
+        v === 'series' && key !== 'other' && key !== 'main'
+          ? Number(a.dataset.seriesSort) - Number(b.dataset.seriesSort)
+          : order.get(a)! - order.get(b)!,
+      );
       const section = document.createElement('section');
       section.className = 'section';
       section.id = `s-${key}`;
@@ -251,12 +260,12 @@ const codeIndex = new Map(codes.map((c, i) => [c, i]));
 
   const params = new URLSearchParams(location.hash.slice(1));
   const wanted = params.get('v');
-  if (wanted === 'region' || wanted === 'code') {
+  if (wanted === 'region' || wanted === 'series') {
     for (const b of viewButtons) b.setAttribute('aria-pressed', String(b.dataset.view === wanted));
   }
   if (params.get('q')) search.value = params.get('q')!;
   render();
-  // 코드 보기의 바로가기는 개별 이벤트로 이동하므로, 해시로 들어온 경우 위치를 맞춰 준다
+  // #g-<이벤트 id> 로 들어온 경우 해당 카드를 펼쳐서 보여 준다
   const target = location.hash.startsWith('#g-') && document.getElementById(location.hash.slice(1));
   if (target instanceof HTMLDetailsElement) {
     target.open = true;
@@ -290,7 +299,7 @@ const codeIndex = new Map(codes.map((c, i) => [c, i]));
     max-height: 7.5rem;
     overflow-y: auto;
   }
-  .jump--code a {
+  .jump--series a {
     font-size: 0.85rem;
   }
   .groups {

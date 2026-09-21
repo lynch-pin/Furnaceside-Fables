@@ -190,6 +190,10 @@ h3 {
   font-size: 0.9rem;
   margin: 0.5rem 0 1rem;
 }
+/* display:flex 가 [hidden] 의 display:none 을 이기므로 명시적으로 숨긴다 */
+.shortcuts[hidden] {
+  display: none;
+}
 .shortcuts a,
 .shortcuts button {
   font: inherit;

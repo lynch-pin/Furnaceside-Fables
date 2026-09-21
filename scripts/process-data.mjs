@@ -96,6 +96,47 @@ const itemTable = loadExcelAll('item_table', { required: false });
 const uniequip = loadExcelAll('uniequip_table', { required: false });
 const storyReviewMeta = loadExcelAll('story_review_meta_table', { required: false });
 
+/**
+ * 인게임 계열(스토리라인) 분류 — stage_table.storylines.
+ *   ssLine_1 [Rl] 방주 = 흑야의 회고록 + 워크 인 더 더스트 + …  처럼 여러 이벤트를 한 계열로 묶는다.
+ *   storylineIconId('storyline_abbr_Rl') 의 접미사가 게임에서 보여주는 2글자 코드(RL).
+ *   KR/CN 합집합 — 이름은 KR 우선, 계열에 속한 이벤트는 양쪽을 합친다(CN 선행 이벤트 포함).
+ */
+const { seriesList, seriesOfAct } = (() => {
+  const MAIN = { id: 'main', code: null, name: '메인 스토리', order: -1 };
+  const list = new Map([['main', MAIN]]);
+  const ofAct = new Map(); // actId → { id, sort }
+  for (const locale of LOCALES) {
+    // stage_table 은 20MB 가 넘으므로 storylines 만 뽑고 바로 버린다.
+    let table = null;
+    try {
+      table = JSON.parse(fs.readFileSync(excelPath(locale, 'stage_table'), 'utf8'));
+    } catch (err) {
+      log(`  stage_table(${locale}) 를 읽지 못했습니다 — 계열 분류 건너뜀: ${err.message}`);
+      continue;
+    }
+    for (const line of Object.values(table.storylines ?? {})) {
+      const abbr = String(line.storylineIconId ?? '').replace('storyline_abbr_', '');
+      if (!abbr) continue; // mainLine 은 코드가 없다 — 메인 스토리로 따로 묶는다
+      const id = line.storylineId;
+      if (!list.has(id) || locale === PRIMARY) {
+        list.set(id, { id, code: abbr.toUpperCase(), name: line.storylineName, order: line.sortId ?? 999 });
+      }
+      for (const loc of Object.values(line.locations ?? {})) {
+        if (loc.locationType !== 'STORY_SET') continue;
+        const setId = String(loc.relevantStorySetId ?? '');
+        if (!setId.startsWith('setId_ssLine_')) continue; // BEFORE/AFTER 로 끼워넣은 메인 스토리 참조는 제외
+        const actId = setId.slice('setId_ssLine_'.length);
+        if (!ofAct.has(actId)) ofAct.set(actId, { id, sort: loc.sortId ?? 0 });
+      }
+    }
+    table = null;
+  }
+  const ordered = [...list.values()].sort((a, b) => a.order - b.order);
+  return { seriesList: ordered, seriesOfAct: ofAct };
+})();
+log(`인게임 계열 ${seriesList.length - 1}개 / 분류된 이벤트 ${seriesOfAct.size}개`);
+
 /** 모든 로케일에 걸친 키 합집합 (ko 순서 우선) */
 const unionKeys = (tables) => {
   const seen = new Set();
@@ -493,6 +534,13 @@ for (const groupId of unionKeys(storyReview)) {
     group.code = top ? top[0] : null;
   }
 
+  // 인게임 계열 (RL-방주 …). 메인 스토리는 통째로 '메인 스토리' 계열, 어디에도 없으면 null(=기타).
+  {
+    const hit = group.kind === 'main' ? { id: 'main', sort: group.timestamp ?? 0 } : seriesOfAct.get(groupId);
+    group.series = hit?.id ?? null;
+    group.seriesSort = hit?.sort ?? 0;
+  }
+
   // 지역: 가장 많이 언급된 것부터. 으뜸의 40% 이상인 것까지만 남긴다 (최대 3개)
   {
     const sorted = Object.entries(regionCounts).sort((a, b) => b[1] - a[1]);
@@ -876,7 +924,7 @@ for (const op of operators.values()) {
 write('speakers.json', speakerMap);
 log(`  화자 이름 대응 ${Object.keys(speakerMap).length}개`);
 
-write('stories.json', { groups, stories });
+write('stories.json', { groups, stories, series: seriesList });
 write('operators.json', operatorList);
 write('timeline.json', timeline);
 write('meta.json', {
