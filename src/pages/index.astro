@@ -143,6 +143,7 @@ const recent = [...timeline].sort((a, b) => b.releaseTimestamp - a.releaseTimest
 <script>
   // 빌드 시점 날짜로 렌더된 추천을 오늘(KST) 날짜 기준으로 다시 고른다.
   import { pickDaily, todayKst } from '../lib/daily.mjs';
+  import { stampScope } from '../lib/scope.mjs';
 
   const list = document.getElementById('rec-list');
   const poolEl = document.getElementById('rec-pool');
@@ -166,6 +167,7 @@ const recent = [...timeline].sort((a, b) => b.releaseTimestamp - a.releaseTimest
           </a></li>`,
         )
         .join('');
+      stampScope(list, list); // 새로 만든 카드에도 페이지 스타일이 걸리도록
       dateEl.textContent = today;
     }
   }

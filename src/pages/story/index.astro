@@ -163,6 +163,8 @@ const seriesNav = seriesOrder.map((id) => ({
 </Layout>
 
 <script>
+  import { stampScope } from '../../lib/scope.mjs';
+
   // 보기 전환: 카드를 다시 배치하고 구역 제목을 새로 만든다. 상태는 URL 해시(#v=region&q=…).
   const KIND_LABEL: Record<string, string> = {
     main: '메인 스토리',
@@ -241,6 +243,7 @@ const seriesNav = seriesOrder.map((id) => ({
       box.className = 'groups';
       box.append(...list);
       section.append(box);
+      stampScope(container, section); // 구역 제목·격자에도 페이지 스타일이 걸리도록
       frag.append(section);
     }
     container.replaceChildren(frag);
