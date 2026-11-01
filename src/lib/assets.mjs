@@ -93,5 +93,38 @@ export const storyMainPic = (groupId, picId) =>
   picId ? assetUrl(`arts/ui/storyreview/hubs/minichar/${groupId}/${picId}.png`) : null;
 
 /** 스토리 스크립트의 배경/CG 이미지 */
+/**
+ * AVG 전신 스프라이트. base 예: "avg_172_svrash_1" / "avg_npc_1296_1".
+ * 실제 파일은 표정별로 쪼개져 있고(avg_x/avg_x#1$1.png) 플랫 파일인 경우도 있어서
+ * 인덱스에서 그 스프라이트의 첫 파일을 찾아 쓴다. 없으면 null.
+ * ※ 장당 340~600KB 라 목록에 깔지 말고 눌렀을 때만 불러올 것.
+ */
+let spriteIndex = null;
+function loadSpriteIndex() {
+  if (spriteIndex !== null) return spriteIndex;
+  const idx = loadIndex();
+  if (idx === false) {
+    spriteIndex = false;
+    return spriteIndex;
+  }
+  spriteIndex = new Map();
+  for (const rel of idx) {
+    if (!rel.startsWith('avg/characters/')) continue;
+    const rest = rel.slice('avg/characters/'.length);
+    const base = rest.includes('/') ? rest.split('/')[0] : rest.replace(/\.png$/, '').split('#')[0];
+    if (!spriteIndex.has(base)) spriteIndex.set(base, rel);
+  }
+  return spriteIndex;
+}
+export function avgSprite(base) {
+  if (!base) return null;
+  const idx = loadSpriteIndex();
+  if (idx === false) return null;
+  const rel = idx.get(base);
+  if (!rel) return null;
+  // '#' 은 프래그먼트, '$' 는 일부 CDN 에서 말썽이라 인코딩
+  return `${ASSET_BASE}/${rel.replace(/#/g, '%23').replace(/\$/g, '%24')}`;
+}
+
 export const avgBackground = (image) => (image ? assetUrl(`avg/backgrounds/${image}.png`) : null);
 export const avgImage = (image) => (image ? assetUrl(`avg/images/${image}.png`) : null);

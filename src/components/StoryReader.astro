@@ -8,12 +8,12 @@
  *   faces?        화자 이름 → 오퍼레이터 id (대사 옆 아바타)
  *
  * 아바타가 없는 화자(스토리 전용 NPC)는 이름 첫 글자 배지로 대신한다.
- * NPC 의 AVG 스프라이트는 장당 340~600KB 전신 일러스트뿐이라 쓰지 않는다.
+ * AVG 전신 스프라이트는 장당 340~600KB 라 목록에 깔지 않고, 눌렀을 때만 받아 팝업으로 띄운다.
  *
  * TODO(reader): 배경/CG 이미지 표시, 선택지 분기 접기, 폰트 크기 조절 등은 여기서 확장.
  */
 import { richTextToHtml } from '../lib/story-parser.mjs';
-import { operatorAvatar } from '../lib/assets.mjs';
+import { operatorAvatar, avgSprite } from '../lib/assets.mjs';
 
 interface Props {
   lines: Array<Record<string, any>>;
@@ -32,6 +32,14 @@ const hue = (n: string) => {
   for (const ch of n) h = (h * 31 + ch.codePointAt(0)!) % 360;
   return h;
 };
+// 이 스토리에 나오는 스프라이트만 모아 둔다 (누르면 그때 받는다)
+const spriteUrls: Record<string, string> = {};
+for (const l of lines) {
+  if (l.type !== 'dialogue' || !l.sprite || spriteUrls[l.sprite]) continue;
+  const url = avgSprite(l.sprite);
+  if (url) spriteUrls[l.sprite] = url;
+}
+const hasSprites = Object.keys(spriteUrls).length > 0;
 const html = (t: string) => richTextToHtml(t ?? '');
 const branchLabel = (b?: string[]) => (b ? `선택 ${b.join(', ')}` : null);
 ---
@@ -50,11 +58,21 @@ const branchLabel = (b?: string[]) => (b ? `선택 ${b.join(', ')}` : null);
         return (
           <div class:list={['line', 'line--dialogue', { 'line--continued': line.continued }]} data-branch={branch}>
             <span class="speaker">
-              {avatar ? (
-                <img class="face" src={avatar} alt="" loading="lazy" decoding="async" width="28" height="28" />
-              ) : (
-                <span class="face face--initial" style={`--h:${hue(name)}`} aria-hidden="true">{[...name][0] ?? '?'}</span>
-              )}
+              {(() => {
+                const inner = avatar ? (
+                  <img class="face" src={avatar} alt="" loading="lazy" decoding="async" width="28" height="28" />
+                ) : (
+                  <span class="face face--initial" style={`--h:${hue(name)}`} aria-hidden="true">{[...name][0] ?? '?'}</span>
+                );
+                const sprite = line.sprite && spriteUrls[line.sprite] ? line.sprite : null;
+                return sprite ? (
+                  <button type="button" class="face-btn" data-sprite={sprite} data-name={name} title={`${name} 전신 일러스트 보기`}>
+                    {inner}
+                  </button>
+                ) : (
+                  inner
+                );
+              })()}
               <span class="speaker__name">
                 {opId ? <a href={`/operator/${opId}`}>{name}</a> : name}
               </span>
@@ -98,7 +116,56 @@ const branchLabel = (b?: string[]) => (b ? `선택 ${b.join(', ')}` : null);
         return null;
     }
   })}
+
+  {hasSprites && (
+    <>
+      <script type="application/json" id="sprite-urls" set:html={JSON.stringify(spriteUrls)} />
+      <div class="lightbox" id="sprite-box" hidden>
+        <button type="button" class="lightbox__close" id="sprite-close" aria-label="닫기">×</button>
+        <figure class="lightbox__fig">
+          <img id="sprite-img" alt="" />
+          <figcaption id="sprite-cap" class="small"></figcaption>
+        </figure>
+      </div>
+    </>
+  )}
 </div>
+
+<script>
+  // 전신 일러스트 팝업. 이미지는 누르기 전까지 받지 않는다 (장당 340~600KB).
+  const box = document.getElementById('sprite-box') as HTMLElement | null;
+  if (box) {
+    const urls: Record<string, string> = JSON.parse(
+      document.getElementById('sprite-urls')?.textContent ?? '{}',
+    );
+    const img = document.getElementById('sprite-img') as HTMLImageElement;
+    const cap = document.getElementById('sprite-cap')!;
+    const close = () => {
+      box.hidden = true;
+      img.removeAttribute('src'); // 닫으면 디코딩된 이미지를 놓아 준다
+      document.body.style.overflow = '';
+    };
+    document.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      const btn = target.closest<HTMLElement>('.face-btn');
+      if (btn) {
+        const url = urls[btn.dataset.sprite ?? ''];
+        if (!url) return;
+        const name = btn.dataset.name ?? '';
+        img.src = url;
+        img.alt = `${name} 전신 일러스트`;
+        cap.textContent = name;
+        box.hidden = false;
+        document.body.style.overflow = 'hidden';
+        return;
+      }
+      if (!box.hidden && (target === box || target.closest('#sprite-close'))) close();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !box.hidden) close();
+    });
+  }
+</script>
 
 <style>
   .reader {
@@ -144,6 +211,63 @@ const branchLabel = (b?: string[]) => (b ? `선택 ${b.join(', ')}` : null);
     flex-shrink: 0;
     background: var(--color-line);
     object-fit: cover;
+  }
+  .face-btn {
+    display: flex;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: zoom-in;
+    border-radius: 50%;
+  }
+  .face-btn:hover .face,
+  .face-btn:focus-visible .face {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+  }
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background: rgb(0 0 0 / 0.82);
+    cursor: zoom-out;
+  }
+  /* display:flex 가 [hidden] 을 이기므로 명시적으로 */
+  .lightbox[hidden] {
+    display: none;
+  }
+  .lightbox__fig {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    max-height: 100%;
+  }
+  .lightbox__fig img {
+    max-width: min(90vw, 40rem);
+    max-height: 80vh;
+    object-fit: contain;
+  }
+  .lightbox__fig figcaption {
+    font-family: var(--font-sans);
+    color: #fff;
+  }
+  .lightbox__close {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.75rem;
+    font-size: 2rem;
+    line-height: 1;
+    color: #fff;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
   }
   .face--initial {
     display: grid;
