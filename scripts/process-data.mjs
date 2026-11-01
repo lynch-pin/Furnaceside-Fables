@@ -378,6 +378,10 @@ const groups = []; // 스토리 그룹(이벤트/챕터/오퍼레이터 레코�
 const stories = []; // 개별 스토리
 const storyIndex = new Map(); // storyId → story
 const appearanceIndex = new Map(); // charId → Set<storyId>
+// 화자 이름 → 오퍼레이터 초상화. 스토리 리더에서 대사 옆에 아바타를 띄우는 데 쓴다.
+//   (a) 이름이 오퍼레이터 이름과 그대로 일치   (b) 그 화자가 말할 때 화면에 떠 있던 스프라이트
+// (b) 는 추정이므로 근거 3회 이상 + 우세 60% 이상일 때만 채택한다.
+const facePairs = new Map(); // 화자 이름 → Map<charId, 횟수>
 let missingText = 0;
 
 for (const groupId of unionKeys(storyReview)) {
@@ -451,6 +455,16 @@ for (const groupId of unionKeys(storyReview)) {
       const anyBg = bgs.map((b) => avgBackground(b)).filter(Boolean);
       if (!image) image = cgs[0] ?? goodBg[0] ?? anyBg[0] ?? null;
       imageCandidates.push({ cg: cgs[0] ?? null, bg: goodBg[0] ?? null });
+      // 대사 줄에 붙은 스프라이트 → 화자 이름과 짝지어 둔다 (faces.json 재료).
+      // NPC 스프라이트도 반드시 함께 센다. 오퍼레이터로 매칭되는 것만 세면 분모가 왜곡되어
+      // "가끔 같은 화면에 있었을 뿐인 오퍼레이터"가 100% 우세로 둔갑한다.
+      for (const l of lines) {
+        if (l.type !== 'dialogue' || !l.sprite) continue;
+        if (!facePairs.has(l.speaker)) facePairs.set(l.speaker, new Map());
+        const m = facePairs.get(l.speaker);
+        m.set(l.sprite, (m.get(l.sprite) ?? 0) + 1);
+      }
+
       const charLines = new Map(); // charId → { lines, viaSprite }
       const bump = (charId, n, viaSprite) => {
         const cur = charLines.get(charId) ?? { lines: 0, viaSprite: false };
@@ -921,7 +935,52 @@ for (const id of unionKeys({ [PRIMARY]: handbook[PRIMARY]?.npcDict ?? {}, [LOCAL
 for (const op of operators.values()) {
   if (op.translated && op.nameCn) addSpeaker(op.nameCn, op.name);
 }
-write('speakers.json', speakerMap);
+// 화자 이름 → 오퍼레이터 id (대사 옆 초상화용)
+{
+  const faces = {};
+  const claimed = new Set(); // 이미 임자가 있는 오퍼레이터 (한 얼굴은 한 화자에게만)
+  for (const op of operators.values()) {
+    faces[op.name] = op.id; // 이름이 곧 오퍼레이터인 경우 — 확실
+    claimed.add(op.id);
+  }
+  let viaSprite = 0;
+  let rejected = 0;
+  for (const [speaker, counts] of facePairs) {
+    if (faces[speaker]) continue;
+    const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    const total = sorted.reduce((acc, [, n]) => acc + n, 0);
+    const [sprite, n] = sorted[0];
+    // 그 화자가 말할 때 압도적으로 자주 떠 있던 스프라이트만 본다 (NPC 스프라이트 포함해 계산)
+    if (total < 5 || n / total < 0.75) continue;
+    const key = spriteToCharKey(sprite);
+    const charId = key && spriteKeyToId.get(key.key);
+    if (!charId) continue; // NPC 전용 스프라이트 — 쓸 수 있는 작은 아바타가 없다
+    if (claimed.has(charId)) {
+      rejected++; // 그 얼굴의 임자는 따로 있다 (같은 장면에 자주 선 다른 인물)
+      continue;
+    }
+    faces[speaker] = charId;
+    claimed.add(charId);
+    viaSprite++;
+  }
+  write('faces.json', faces);
+  log(`  화자 초상화 ${Object.keys(faces).length}명 (스프라이트 추정 ${viaSprite}명, 중복 배제 ${rejected}명)`);
+}
+
+// 기존 파일과 합쳐서 쓴다. build-glossary 가 KR/CN 병렬 대본에서 뽑아 넣은 수천 건이 있는데,
+// 이 스크립트를 단독으로 돌리면 그게 통째로 날아가기 때문이다 (테이블 기반 값이 우선).
+{
+  let existing = {};
+  try {
+    existing = JSON.parse(fs.readFileSync(path.join(OUT_DIR, 'speakers.json'), 'utf8'));
+  } catch {
+    /* 첫 실행 */
+  }
+  const merged = { ...existing, ...speakerMap };
+  write('speakers.json', merged);
+  const kept = Object.keys(merged).length - Object.keys(speakerMap).length;
+  if (kept > 0) log(`  (대본에서 뽑은 화자 이름 ${kept}개 보존 — build-glossary 결과)`);
+}
 log(`  화자 이름 대응 ${Object.keys(speakerMap).length}개`);
 
 write('stories.json', { groups, stories, series: seriesList });

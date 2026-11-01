@@ -224,6 +224,25 @@ export function parseStoryWithMeta(source, opts = {}) {
   const addSprite = (v) => {
     if (typeof v === 'string' && v) sprites.add(v);
   };
+
+  // 화면에 올라와 있는 스프라이트 상태. 대사 줄에 "지금 말하는 사람의 그림"을 붙이기 위해 추적한다.
+  //   [charslot(slot="m",name="avg_xxx",focus="m")] / [Character(name="avg_a/avg_b",focus=2)]
+  //   [charslot] (인자 없음) 은 전원 퇴장.
+  const slots = new Map(); // slot 키 → 스프라이트 기본형
+  let focusSlot = null;
+  /** "avg_4151_tinman_1#1$1" / "a/b" → "avg_4151_tinman_1" */
+  const baseSprite = (v) => {
+    if (typeof v !== 'string' || !v) return null;
+    const first = v.split('/')[0];
+    const clean = first.split('#')[0].split('$')[0].trim();
+    return clean || null;
+  };
+  /** 지금 말하는 사람으로 볼 수 있는 스프라이트 (focus 우선, 혼자면 그 하나) */
+  const currentSprite = () => {
+    if (focusSlot != null && slots.has(focusSlot)) return slots.get(focusSlot);
+    if (slots.size === 1) return [...slots.values()][0];
+    return null;
+  };
   const push = (entry) => {
     if (activeBranch && entry.type !== 'decision' && entry.type !== 'predicate') {
       entry.branch = activeBranch;
@@ -261,14 +280,21 @@ export function parseStoryWithMeta(source, opts = {}) {
         push({ type: 'header', text: restText, attrs });
         break;
 
-      case 'name':
+      case 'name': {
         if (attrs.avatarId) addSprite(attrs.avatarId);
-        pushDialogue(attrs.name, restText, attrs.avatarId ? { avatarId: attrs.avatarId } : {});
+        const sprite = currentSprite();
+        pushDialogue(attrs.name, restText, {
+          ...(attrs.avatarId ? { avatarId: attrs.avatarId } : {}),
+          ...(sprite ? { sprite } : {}),
+        });
         break;
+      }
 
-      case 'multiline':
-        pushDialogue(attrs.name, restText, { continued: true });
+      case 'multiline': {
+        const sprite = currentSprite();
+        pushDialogue(attrs.name, restText, { continued: true, ...(sprite ? { sprite } : {}) });
         break;
+      }
 
       case 'decision': {
         const options = SPLIT_LIST(attrs.options);
@@ -324,6 +350,27 @@ export function parseStoryWithMeta(source, opts = {}) {
         addSprite(attrs.name);
         addSprite(attrs.name2);
         addSprite(attrs.name3);
+        if (tag === 'charslot') {
+          if (!attrs.name && !attrs.slot) {
+            slots.clear();
+            focusSlot = null;
+          } else {
+            const slot = attrs.slot ?? 'm';
+            const sprite = baseSprite(attrs.name);
+            if (sprite) slots.set(slot, sprite);
+            else slots.delete(slot);
+            if (attrs.focus != null) focusSlot = String(attrs.focus);
+          }
+        } else if (tag === 'character') {
+          // [Character] 는 화면을 통째로 갈아끼운다. name/name2/name3 가 1/2/3번 자리.
+          slots.clear();
+          for (const [i, v] of [attrs.name, attrs.name2, attrs.name3].entries()) {
+            const sprite = baseSprite(v);
+            if (sprite) slots.set(String(i + 1), sprite);
+          }
+          // focus 는 따옴표 없이 오면 숫자로 파싱된다 (focus=2). 슬롯 키가 문자열이므로 맞춰 준다.
+          focusSlot = attrs.focus != null ? String(attrs.focus) : slots.size === 1 ? '1' : null;
+        }
         if (keepDirectives) push({ type: 'directive', tag, attrs });
         break;
 

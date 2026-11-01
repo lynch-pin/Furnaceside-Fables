@@ -94,3 +94,33 @@ test('spriteToCharKey', () => {
   assert.equal(spriteToCharKey('avgnew_2014_nian_1').key, '2014_nian');
   assert.equal(spriteToCharKey('avg_npc_068#5'), null);
 });
+
+test('dialogue lines carry the sprite that is on screen', () => {
+  const lines = parseStory(
+    [
+      '[charslot(slot="m",name="avg_4087_ines_1#1$1",focus="m")]',
+      '[name="이네스"]첫 줄.',
+      '[charslot(slot="l",name="avg_1028_texas2_1#2$1")]',
+      '[charslot(slot="m",name="avg_4087_ines_1#3$1",focus="l")]',
+      '[name="텍사스"]초점이 옮겨간 뒤.',
+      '[charslot]',
+      '[name="목소리"]아무도 없을 때.',
+    ].join('\n'),
+  );
+  const dlg = lines.filter((l) => l.type === 'dialogue');
+  assert.deepEqual(
+    dlg.map((l) => [l.speaker, l.sprite ?? null]),
+    [
+      ['이네스', 'avg_4087_ines_1'],
+      ['텍사스', 'avg_1028_texas2_1'],
+      ['목소리', null],
+    ],
+  );
+});
+
+test('[Character] replaces the whole stage', () => {
+  const lines = parseStory(
+    ['[Character(name="avg_123_a_1",name2="avg_456_b_1",focus=2)]', '[name="B"]둘 중 뒤쪽.'].join('\n'),
+  );
+  assert.equal(lines.find((l) => l.type === 'dialogue').sprite, 'avg_456_b_1');
+});

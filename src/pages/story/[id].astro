@@ -6,7 +6,7 @@
 import Layout from '../../layouts/Layout.astro';
 import StoryReader from '../../components/StoryReader.astro';
 import SourceBadge from '../../components/SourceBadge.astro';
-import { loadStories, loadOperators, KIND_LABEL } from '../../lib/data.mjs';
+import { loadStories, loadOperators, loadSpeakers, loadFaces, KIND_LABEL } from '../../lib/data.mjs';
 import { readStoryText, applyStoryTranslation } from '../../lib/i18n.mjs';
 import { parseStory } from '../../lib/story-parser.mjs';
 
@@ -21,6 +21,9 @@ const group = groups.find((g) => g.id === story.groupId)!;
 const operators = loadOperators();
 const opName = new Map(operators.map((o) => [o.id, o.name]));
 const nameToId = new Map(operators.map((o) => [o.name, o.id]));
+// 화자 표시용: CN 원문 스토리는 이름만이라도 한국어로, 오퍼레이터면 아바타를 붙인다.
+const speakerNames = loadSpeakers();
+const faces = loadFaces();
 
 const raw = readStoryText(story.txt);
 let lines = raw ? parseStory(raw.text) : [];
@@ -72,7 +75,7 @@ const title = [story.code, story.name].filter(Boolean).join(' ');
       )}
     </header>
 
-    <StoryReader lines={lines} nameToId={nameToId} />
+    <StoryReader lines={lines} nameToId={nameToId} speakerNames={speakerNames} faces={faces} />
 
     <nav class="pager" aria-label="이전/다음 스토리">
       {prev ? <a href={`/story/${prev.id}`}>← {prev.code ? `${prev.code} ` : ''}{prev.name}</a> : <span />}

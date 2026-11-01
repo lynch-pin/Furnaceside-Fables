@@ -2,19 +2,36 @@
 /**
  * src/components/StoryReader.astro — 파싱된 스토리 라인 렌더링.
  * props:
- *   lines        parseStory() 결과
- *   nameToId?    화자 이름 → 오퍼레이터 id (이름을 오퍼레이터 페이지로 링크)
+ *   lines         parseStory() 결과
+ *   nameToId?     화자 이름 → 오퍼레이터 id (이름을 오퍼레이터 페이지로 링크)
+ *   speakerNames? 중국어 화자 이름 → 한국어 표기 (CN 원문 스토리에서 이름만이라도 한국어로)
+ *   faces?        화자 이름 → 오퍼레이터 id (대사 옆 아바타)
+ *
+ * 아바타가 없는 화자(스토리 전용 NPC)는 이름 첫 글자 배지로 대신한다.
+ * NPC 의 AVG 스프라이트는 장당 340~600KB 전신 일러스트뿐이라 쓰지 않는다.
  *
  * TODO(reader): 배경/CG 이미지 표시, 선택지 분기 접기, 폰트 크기 조절 등은 여기서 확장.
  */
 import { richTextToHtml } from '../lib/story-parser.mjs';
+import { operatorAvatar } from '../lib/assets.mjs';
 
 interface Props {
   lines: Array<Record<string, any>>;
   nameToId?: Map<string, string>;
+  speakerNames?: Record<string, string>;
+  faces?: Record<string, string>;
 }
 
-const { lines, nameToId = new Map() } = Astro.props;
+const { lines, nameToId = new Map(), speakerNames = {}, faces = {} } = Astro.props;
+/** CN 원문 화자 이름을 한국어 표기로 (대응표에 없으면 원문 그대로) */
+const display = (n: string) => speakerNames[n] ?? n;
+const faceId = (n: string) => faces[display(n)] ?? faces[n] ?? null;
+/** 아바타가 없는 화자: 이름으로 색을 정해 늘 같은 배지가 나오게 한다 */
+const hue = (n: string) => {
+  let h = 0;
+  for (const ch of n) h = (h * 31 + ch.codePointAt(0)!) % 360;
+  return h;
+};
 const html = (t: string) => richTextToHtml(t ?? '');
 const branchLabel = (b?: string[]) => (b ? `선택 ${b.join(', ')}` : null);
 ---
@@ -26,11 +43,21 @@ const branchLabel = (b?: string[]) => (b ? `선택 ${b.join(', ')}` : null);
       case 'header':
         return null; /* 내부용 제목(중국어 원제)은 표시하지 않음 */
       case 'dialogue': {
-        const opId = nameToId.get(line.speaker);
+        const name = display(line.speaker);
+        const opId = nameToId.get(name) ?? nameToId.get(line.speaker);
+        const face = faceId(line.speaker);
+        const avatar = face ? operatorAvatar(face) : null;
         return (
           <div class:list={['line', 'line--dialogue', { 'line--continued': line.continued }]} data-branch={branch}>
             <span class="speaker">
-              {opId ? <a href={`/operator/${opId}`}>{line.speaker}</a> : line.speaker}
+              {avatar ? (
+                <img class="face" src={avatar} alt="" loading="lazy" decoding="async" width="28" height="28" />
+              ) : (
+                <span class="face face--initial" style={`--h:${hue(name)}`} aria-hidden="true">{[...name][0] ?? '?'}</span>
+              )}
+              <span class="speaker__name">
+                {opId ? <a href={`/operator/${opId}`}>{name}</a> : name}
+              </span>
             </span>
             <p class="text" set:html={html(line.text)} />
           </div>
@@ -83,9 +110,9 @@ const branchLabel = (b?: string[]) => (b ? `선택 ${b.join(', ')}` : null);
   }
   .line--dialogue {
     display: grid;
-    grid-template-columns: minmax(5rem, 7.5rem) 1fr;
+    grid-template-columns: minmax(7rem, 10rem) 1fr;
     gap: 0.75rem;
-    align-items: baseline;
+    align-items: start;
   }
   .line--continued {
     margin-top: -0.6rem;
@@ -94,13 +121,44 @@ const branchLabel = (b?: string[]) => (b ? `선택 ${b.join(', ')}` : null);
     visibility: hidden;
   }
   .speaker {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.4rem;
     font-weight: 600;
     text-align: right;
     color: var(--color-accent);
     font-size: 0.95em;
+    line-height: 1.4;
   }
   .speaker a {
     color: inherit;
+  }
+  .speaker__name {
+    min-width: 0;
+  }
+  .face {
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--color-line);
+    object-fit: cover;
+  }
+  .face--initial {
+    display: grid;
+    place-items: center;
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: hsl(var(--h) 35% 85%);
+    background: hsl(var(--h) 22% 30%);
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme='dark']) .face--initial {
+      color: hsl(var(--h) 30% 25%);
+      background: hsl(var(--h) 35% 85%);
+    }
   }
   .text {
     margin: 0;

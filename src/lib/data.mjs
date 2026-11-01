@@ -33,6 +33,22 @@ export const loadTimeline = () => loadJson('timeline.json');
 export const loadMeta = () => loadJson('meta.json');
 /** @returns {any} */
 export const loadGlossary = () => loadJson('glossary.json');
+/** 중국어 화자 이름 → 한국어 표기. 없으면 빈 객체. @returns {Record<string,string>} */
+export const loadSpeakers = () => {
+  try {
+    return loadJson('speakers.json');
+  } catch {
+    return {};
+  }
+};
+/** 화자 이름 → 오퍼레이터 id (대사 옆 초상화). 없으면 빈 객체. @returns {Record<string,string>} */
+export const loadFaces = () => {
+  try {
+    return loadJson('faces.json');
+  } catch {
+    return {};
+  }
+};
 
 /** storyId → story */
 export function storyById(id) {
