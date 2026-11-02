@@ -39,7 +39,7 @@ node scripts/fetch-image.mjs get avg/backgrounds/bg_ltstreet1.png
 | 이미지 | 저장소 |
 | --- | --- |
 | 오퍼레이터 아바타·초상화·스킨 전신, 적·아이템·스킬 아이콘 | yuanyan3060/ArknightsGameResource |
-| 스토리 배경·CG(`avg/`), UI(`arts/ui/`), AVG 캐릭터 스프라이트 | ArknightsAssets/ArknightsAssets (cn 브랜치) |
+| 스토리 배경·CG(`avg/`), UI(`arts/ui/`), AVG 캐릭터 스프라이트 | ArknightsAssets/ArknightsAssets2 (cn 브랜치, 경로 전부 소문자) |
 
 ArknightsAssets 의 `arts/characters/` 같은 대형 파일은 Git LFS 라서 익명으로 받으면 14바이트 포인터만 온다.
 전신 일러스트는 반드시 ArknightsGameResource 의 `skin/` 을 쓴다. 스크립트는 포인터를 받으면 경고하고 건너뛴다.

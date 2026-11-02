@@ -79,12 +79,15 @@ npm run image -- search bg_lt        # 경로 검색
 
 | 용도 | 소스 |
 | --- | --- |
-| 오퍼레이터 아바타 | yuanyan3060/ArknightsGameResource `avatar/` (없으면 ArknightsAssets `arts/charavatars/`) |
-| 이벤트 대표 이미지 | ArknightsAssets `arts/ui/storyreview/hubs/{activity,mini}/storyEntryPic_*` |
-| 메인 챕터 배너 | ArknightsAssets `arts/ui/homebanners/zone/main_N.png` |
+| 오퍼레이터 아바타 | yuanyan3060/ArknightsGameResource `avatar/` (없으면 ArknightsAssets2 `arts/charavatars/`) |
+| 이벤트 대표 이미지 | ArknightsAssets2 `arts/ui/storyreview/hubs/{activity,mini}/storyentrypic_*` |
+| 메인 챕터 배너 | ArknightsAssets2 `arts/ui/homebanners/zone/main_N.png` |
 | 개별 스토리 | `storyMainPic_*` → 없으면 스크립트의 첫 CG(`avg/images`) 또는 배경(`avg/backgrounds`) |
 
 존재 여부는 `scripts/sync-data.sh` 가 만드는 `gamedata/assets-index.txt`, `gamedata/avatar-index.txt` 로 확인한다.
+
+> **이미지 미러 주의**: 원조 `ArknightsAssets/ArknightsAssets` 는 2025-04-21 이후 갱신이 멈췄다. 그 뒤에 나온
+> 이벤트·캐릭터 이미지는 후속 저장소 `ArknightsAssets/ArknightsAssets2` (`assets/dyn/…`, 경로 전부 소문자)에만 있다.
 
 ## 데이터 소스에 대한 메모
 

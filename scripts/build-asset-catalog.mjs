@@ -38,9 +38,9 @@ const copyIndex = (from, to, strip) => {
   fs.writeFileSync(path.join(OUT, to), lines.join('\n') + '\n');
   return lines.length;
 };
-const nAssets = copyIndex('assets-index.txt', 'paths-assets.txt', /^assets\/torappu\/dynamicassets\//);
+const nAssets = copyIndex('assets-index.txt', 'paths-assets.txt', /^assets\/dyn\//);
 const nRes = copyIndex('avatar-index.txt', 'paths-resource.txt', null);
-log(`  경로: ArknightsAssets ${nAssets} · ArknightsGameResource ${nRes}`);
+log(`  경로: ArknightsAssets2 ${nAssets} · ArknightsGameResource ${nRes}`);
 
 // 2. 오퍼레이터 이름 대응표
 const operators = JSON.parse(fs.readFileSync(path.join(DATA, 'operators.json'), 'utf8')).map((o) => ({

@@ -67,13 +67,26 @@ echo "[sync-data] 완료: $(git -C "$GAMEDATA_DIR" rev-parse --short HEAD)"
 
 # ------------------------------------------------------------------------------
 # 이미지 에셋 인덱스 (썸네일 존재 여부 확인용)
-#   ArknightsAssets/ArknightsAssets 저장소는 수 GB 이므로 파일 목록(트리)만 받는다.
+#   ArknightsAssets/ArknightsAssets2 저장소는 수 GB 이므로 파일 목록(트리)만 받는다.
 #   실제 이미지는 빌드 시 다운로드하지 않고 raw.githubusercontent.com 에서 직접 불러온다 (src/lib/assets.mjs).
+#
+#   NOTE: 원조 ArknightsAssets/ArknightsAssets 는 2025-04-21 이후 갱신이 멈췄다. 그 뒤에 나온 이벤트·캐릭터
+#     이미지(예: 신규 NPC 스프라이트)는 거기 없다. 후속 저장소 ArknightsAssets2 는 경로 구조가 다르다.
+#       옛:  assets/torappu/dynamicassets/<arts|avg>/…   (대소문자 섞임)
+#       새:  assets/dyn/<arts|avg>/…                     (전부 소문자)
+#     옛 경로의 96% 는 새 저장소에 그대로 있고(소문자로), 빠진 건 만료된 가챠 배너·상점 이미지 등이다.
 # ------------------------------------------------------------------------------
-ASSETS_REPO="${ASSETS_REPO:-https://github.com/ArknightsAssets/ArknightsAssets}"
+ASSETS_REPO="${ASSETS_REPO:-https://github.com/ArknightsAssets/ArknightsAssets2}"
 ASSETS_REF="${ASSETS_REF:-cn}"
 ASSETS_INDEX_DIR="$GAMEDATA_DIR/.assets-index"
 ASSETS_INDEX_FILE="$GAMEDATA_DIR/assets-index.txt"
+# CI 는 gamedata/ 를 통째로 캐시하므로 옛 저장소를 가리키는 clone 이 복원될 수 있다.
+# 그대로 fetch 하면 죽은 저장소를 계속 따라가게 되니, 원격이 다르면 버리고 새로 받는다.
+if [[ -d "$ASSETS_INDEX_DIR/.git" ]] && \
+   [[ "$(git -C "$ASSETS_INDEX_DIR" remote get-url origin 2>/dev/null)" != "$ASSETS_REPO" ]]; then
+  echo "[sync-data] 에셋 인덱스 원격이 바뀜 → 옛 clone 폐기"
+  rm -rf "$ASSETS_INDEX_DIR"
+fi
 if [[ ! -d "$ASSETS_INDEX_DIR/.git" ]]; then
   echo "[sync-data] 에셋 인덱스 clone (트리만) → $ASSETS_INDEX_DIR"
   rm -rf "$ASSETS_INDEX_DIR"
@@ -83,9 +96,9 @@ else
   git -C "$ASSETS_INDEX_DIR" reset --soft --quiet FETCH_HEAD
 fi
 git -C "$ASSETS_INDEX_DIR" ls-tree -r --name-only HEAD \
-  | grep -E '^assets/torappu/dynamicassets/(arts|avg)/' \
+  | grep -E '^assets/dyn/(arts|avg)/' \
   > "$ASSETS_INDEX_FILE"
-echo "[sync-data] 에셋 인덱스: $(wc -l < "$ASSETS_INDEX_FILE") 항목"
+echo "[sync-data] 에셋 인덱스: $(wc -l < "$ASSETS_INDEX_FILE") 항목 ($(git -C "$ASSETS_INDEX_DIR" log -1 --format=%cs))"
 
 # 오퍼레이터 아바타는 ArknightsAssets 가 최신 오퍼레이터를 늦게 반영하므로 yuanyan3060/ArknightsGameResource 를 우선 사용
 AVATAR_REPO="${AVATAR_REPO:-https://github.com/yuanyan3060/ArknightsGameResource}"

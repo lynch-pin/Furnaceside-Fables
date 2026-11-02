@@ -19,14 +19,14 @@
  * 어느 저장소에서 받는지:
  *   - 오퍼레이터 아바타·초상화·스킨 전신, 아이템·적·스킬 아이콘 → ArknightsGameResource
  *     (ArknightsAssets 의 같은 파일은 Git LFS 라 익명 접근 시 포인터만 온다)
- *   - 스토리 배경·CG, UI, AVG 캐릭터 스프라이트 → ArknightsAssets
+ *   - 스토리 배경·CG, UI, AVG 캐릭터 스프라이트 → ArknightsAssets2 (경로가 전부 소문자 — 원조 저장소는 2025-04 이후 멈춤)
  */
 import fs from 'node:fs';
 import path from 'node:path';
 
 const ROOT = process.cwd();
 const CATALOG = path.join(ROOT, 'assets-catalog');
-const ASSETS_BASE = 'https://raw.githubusercontent.com/ArknightsAssets/ArknightsAssets/cn/assets/torappu/dynamicassets';
+const ASSETS_BASE = 'https://raw.githubusercontent.com/ArknightsAssets/ArknightsAssets2/cn/assets/dyn';
 const RESOURCE_BASE = 'https://raw.githubusercontent.com/yuanyan3060/ArknightsGameResource/main';
 
 const args = process.argv.slice(2);
@@ -205,9 +205,10 @@ if (cmd === 'op') {
   }
 } else if (cmd === 'search') {
   const q = positional[0] ?? '';
+  const ql = q.toLowerCase(); // ArknightsAssets2 경로는 전부 소문자 — 검색은 대소문자 무시
   const hits = [
-    ...assetPaths().filter((p) => p.includes(q)).map((rel) => ({ rel, repo: 'assets' })),
-    ...resourcePaths().filter((p) => p.includes(q)).map((rel) => ({ rel, repo: 'resource' })),
+    ...assetPaths().filter((p) => p.includes(ql)).map((rel) => ({ rel, repo: 'assets' })),
+    ...resourcePaths().filter((p) => p.toLowerCase().includes(ql)).map((rel) => ({ rel, repo: 'resource' })),
   ];
   console.log(`"${q}" — ${hits.length}개`);
   for (const h of hits.slice(0, LIMIT)) console.log(`  [${h.repo}] ${h.rel}`);

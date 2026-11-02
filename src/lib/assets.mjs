@@ -1,12 +1,16 @@
 /**
  * src/lib/assets.mjs — 이미지 에셋 URL 헬퍼.
  *
- * 이미지는 저장소에 넣지 않고 ArknightsAssets/ArknightsAssets 의 raw 파일을 직접 링크한다.
+ * 이미지는 저장소에 넣지 않고 ArknightsAssets/ArknightsAssets2 의 raw 파일을 직접 링크한다.
+ * (원조 ArknightsAssets/ArknightsAssets 는 2025-04-21 이후 갱신이 멈춰 신규 이미지가 없다.)
  * TODO(assets): 트래픽이 커지면 (1) ASSET_BASE 를 jsDelivr 로 바꾸거나
- *   (https://cdn.jsdelivr.net/gh/ArknightsAssets/ArknightsAssets@cn/assets/torappu/dynamicassets)
+ *   (https://cdn.jsdelivr.net/gh/ArknightsAssets/ArknightsAssets2@cn/assets/dyn)
  *   (2) 빌드 시 public/img/ 로 내려받아 셀프 호스팅하는 스크립트를 추가할 것.
  *
  * 존재 여부는 scripts/sync-data.sh 가 만든 gamedata/assets-index.txt 로 확인한다 (없으면 존재한다고 가정).
+ *
+ * 새 저장소는 경로가 전부 소문자다 (storyEntryPic_act9d0.png → storyentrypic_act9d0.png).
+ * 게임 데이터의 id 는 대소문자가 섞여 있으므로, 조회할 때 소문자로 맞춘다.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,9 +18,9 @@ import { gamedataRoot } from './i18n.mjs';
 
 export const ASSET_BASE =
   process.env.ASSET_BASE ??
-  'https://raw.githubusercontent.com/ArknightsAssets/ArknightsAssets/cn/assets/torappu/dynamicassets';
+  'https://raw.githubusercontent.com/ArknightsAssets/ArknightsAssets2/cn/assets/dyn';
 
-let index = null; // Set<relative path> | false(인덱스 없음)
+let index = null; // Set<소문자 상대 경로> | false(인덱스 없음)
 function loadIndex() {
   if (index !== null) return index;
   const file = path.join(gamedataRoot(), 'assets-index.txt');
@@ -29,7 +33,7 @@ function loadIndex() {
       .readFileSync(file, 'utf8')
       .split('\n')
       .filter(Boolean)
-      .map((p) => p.replace(/^assets\/torappu\/dynamicassets\//, '')),
+      .map((p) => p.replace(/^assets\/dyn\//, '').toLowerCase()),
   );
   return index;
 }
@@ -37,9 +41,11 @@ function loadIndex() {
 /** 상대 경로가 인덱스에 있으면 URL, 없으면 null. 인덱스가 없으면 검증 없이 URL. */
 export function assetUrl(relPath) {
   if (!relPath) return null;
+  const rel = relPath.toLowerCase();
   const idx = loadIndex();
-  if (idx && !idx.has(relPath)) return null;
-  return `${ASSET_BASE}/${relPath}`;
+  if (idx && !idx.has(rel)) return null;
+  // '#' 은 프래그먼트, '$' 는 일부 CDN 에서 말썽이라 인코딩 (파일명에 쓰이는 경우가 있다)
+  return `${ASSET_BASE}/${rel.replace(/#/g, '%23').replace(/\$/g, '%24')}`;
 }
 
 /**
@@ -97,7 +103,7 @@ export const storyMainPic = (groupId, picId) =>
  * AVG 전신 스프라이트. base 예: "avg_172_svrash_1" / "avg_npc_1296_1".
  * 실제 파일은 표정별로 쪼개져 있고(avg_x/avg_x#1$1.png) 플랫 파일인 경우도 있어서
  * 인덱스에서 그 스프라이트의 첫 파일을 찾아 쓴다. 없으면 null.
- * ※ 장당 340~600KB 라 목록에 깔지 말고 눌렀을 때만 불러올 것.
+ * ※ 신규 스프라이트는 1.6~1.9MB 에 달하니 목록에 깔지 말고 눌렀을 때만 불러올 것.
  */
 let spriteIndex = null;
 function loadSpriteIndex() {
@@ -108,10 +114,12 @@ function loadSpriteIndex() {
     return spriteIndex;
   }
   spriteIndex = new Map();
-  for (const rel of idx) {
+  for (const rel of [...idx].sort()) {
     if (!rel.startsWith('avg/characters/')) continue;
     const rest = rel.slice('avg/characters/'.length);
-    const base = rest.includes('/') ? rest.split('/')[0] : rest.replace(/\.png$/, '').split('#')[0];
+    // 폴더형(avg_x/avg_x#1$1.png) 은 폴더 이름이 곧 기본형. 플랫 파일은 확장자와 표정 접미사(#n, $n)를 뗀다
+    // (avg_npc_867_1$1.png → avg_npc_867_1,  avg_char_501_durin_1.png → 그대로).
+    const base = rest.includes('/') ? rest.split('/')[0] : rest.replace(/\.png$/, '').split('#')[0].split('$')[0];
     if (!spriteIndex.has(base)) spriteIndex.set(base, rel);
   }
   return spriteIndex;
@@ -120,10 +128,8 @@ export function avgSprite(base) {
   if (!base) return null;
   const idx = loadSpriteIndex();
   if (idx === false) return null;
-  const rel = idx.get(base);
-  if (!rel) return null;
-  // '#' 은 프래그먼트, '$' 는 일부 CDN 에서 말썽이라 인코딩
-  return `${ASSET_BASE}/${rel.replace(/#/g, '%23').replace(/\$/g, '%24')}`;
+  const rel = idx.get(base.toLowerCase());
+  return rel ? assetUrl(rel) : null;
 }
 
 export const avgBackground = (image) => (image ? assetUrl(`avg/backgrounds/${image}.png`) : null);
